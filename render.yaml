@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: funeraria-martinez-api
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DB_FILE
+        value: /opt/render/project/src/data/empresarial.json
