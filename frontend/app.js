@@ -24,6 +24,7 @@ const today = new Date().toISOString().slice(0, 10);
 
 function toast(s) {
   const e = $("#toast");
+
   if (!e) return;
 
   e.textContent = s;
@@ -141,7 +142,6 @@ async function api(url, opt = {}) {
   );
 
   if (r.status === 401) {
-
     if (url !== "/login") {
       logout();
     }
@@ -172,17 +172,13 @@ async function api(url, opt = {}) {
     const text = await r.text();
 
     try {
-
       d = JSON.parse(text);
-
     } catch {
-
       d = {
         error:
           text ||
           "Respuesta inválida del servidor"
       };
-
     }
   }
 
@@ -211,13 +207,12 @@ function logout() {
 }
 
 /* =========================================================
-   DOCUMENTOS SUSTENTATORIOS
+   DOCUMENTOS
 ========================================================= */
 
 function documentInfo(p) {
 
-  const data =
-    p.document || "";
+  const data = p.document || "";
 
   const name =
     p.document_name ||
@@ -456,18 +451,17 @@ if (loginForm) {
 
     try {
 
-      const d =
-        await api(
-          "/login",
-          {
-            method: "POST",
+      const d = await api(
+        "/login",
+        {
+          method: "POST",
 
-            body: JSON.stringify({
-              username,
-              password
-            })
-          }
-        );
+          body: JSON.stringify({
+            username,
+            password
+          })
+        }
+      );
 
       if (!d.token) {
 
@@ -494,7 +488,6 @@ if (loginForm) {
       }
 
       await loadDashboard();
-
       await loadNotifications();
 
       setInterval(
@@ -603,7 +596,6 @@ if (token) {
     });
 
   loadDashboard();
-
   loadNotifications();
 
   setInterval(
@@ -770,7 +762,6 @@ Registros con demora
 
 </div>
 
-
 </div>
 
 
@@ -783,35 +774,31 @@ Registros con demora
 Permisos por tipo
 </h4>
 
-
 <div class="bars">
 
 ${
   byType.length
+    ? byType.map(x => {
 
-  ?
+        const max =
+          Math.max(
+            1,
+            ...byType.map(
+              a =>
+                Number(a.total) || 0
+            )
+          );
 
-  byType.map(x => {
+        const width =
+          Math.min(
+            100,
+            (
+              (Number(x.total) || 0) /
+              max
+            ) * 100
+          );
 
-    const max =
-      Math.max(
-        1,
-        ...byType.map(
-          a =>
-            Number(a.total) || 0
-        )
-      );
-
-    const width =
-      Math.min(
-        100,
-        (
-          (Number(x.total) || 0) /
-          max
-        ) * 100
-      );
-
-    return `
+        return `
 
 <div class="bar-row">
 
@@ -833,9 +820,9 @@ ${x.total}
 
 `;
 
-  }).join("")
+      }).join("")
 
-  :
+    :
 
 `
 <div class="empty">
@@ -845,6 +832,7 @@ Aún no hay permisos registrados.
 }
 
 </div>
+
 </div>
 
 
@@ -924,7 +912,7 @@ Trabajadores con más registros de permisos
 ${
   ranking.length
 
-  ?
+    ?
 
 `
 <div
@@ -998,20 +986,17 @@ ${x.total}
 </table>
 
 </div>
-
 `
 
-  :
+    :
 
 `
-
 <div class="empty">
 
 Agrega trabajadores y permisos
 para ver estadísticas.
 
 </div>
-
 `
 
 }
@@ -1354,6 +1339,7 @@ async function activateWorker(id) {
       "/workers/" + id,
       {
         method: "PUT",
+
         body: JSON.stringify({
           status: "Activo"
         })
@@ -1582,6 +1568,7 @@ Guardar trabajador
           w.id
             ? "/workers/" + w.id
             : "/workers",
+
           {
             method:
               w.id
@@ -1742,12 +1729,13 @@ style="margin-top:12px"
 ${
   d.permissions.length
 
-  ?
+    ?
 
-  d.permissions
-    .slice(0, 8)
-    .map(
-      p => `
+`
+${d.permissions
+  .slice(0, 8)
+  .map(
+    p => `
 
 <div class="kpi-line">
 
@@ -1766,10 +1754,11 @@ ${badge(p.status)}
 </div>
 
 `
-    )
-    .join("")
+  )
+  .join("")}
+`
 
-  :
+    :
 
 `
 <div class="empty">
@@ -1845,6 +1834,7 @@ id="psearch"
 placeholder="Buscar trabajador o DNI"
 oninput="filterPermissions()"
 >
+
 
 <select
 id="pstatus"
@@ -1998,8 +1988,6 @@ function getWorkerForPermission(
   workers = []
 ) {
 
-  /* Buscar primero por worker_id */
-
   if (
     p.worker_id !== undefined &&
     p.worker_id !== null
@@ -2016,8 +2004,6 @@ function getWorkerForPermission(
       return byId;
     }
   }
-
-  /* Buscar por DNI */
 
   if (p.dni) {
 
@@ -2040,7 +2026,7 @@ function getWorkerForPermission(
 }
 
 /* =========================================================
-   FILAS PERMISOS
+   FILAS DE PERMISOS
 ========================================================= */
 
 function permissionRows(
@@ -2623,8 +2609,6 @@ async function showNotifications() {
         ? d.latest
         : [];
 
-    /* Cargar trabajadores para recuperar nombres */
-
     const workersData =
       await api("/workers");
 
@@ -2645,24 +2629,24 @@ async function showNotifications() {
 ${
   latest.length
 
-  ?
+    ?
 
-  latest.map(x => {
+    latest.map(x => {
 
-    const worker =
-      getWorkerForPermission(
-        x,
-        workers
-      );
+      const worker =
+        getWorkerForPermission(
+          x,
+          workers
+        );
 
-    const workerName =
-      worker?.names ||
-      x.names ||
-      x.nombre ||
-      x.worker_name ||
-      "Sin nombre";
+      const workerName =
+        worker?.names ||
+        x.names ||
+        x.nombre ||
+        x.worker_name ||
+        "Sin nombre";
 
-    return `
+      return `
 
 <div
 class="notification-row"
@@ -2708,9 +2692,9 @@ Pendiente
 
 `;
 
-  }).join("")
+    }).join("")
 
-  :
+    :
 
 `
 
@@ -2976,7 +2960,7 @@ ${documentInfo(p)}
 ${
   p.status === "Pendiente"
 
-  ?
+    ?
 
 `
 <div class="decision-box">
@@ -3026,7 +3010,7 @@ onclick="decidePermission(${p.id},'Aprobado')"
 
 `
 
-  :
+    :
 
 `
 
@@ -3517,6 +3501,7 @@ function attendanceRows(rows) {
 ${esc(a.names)}
 </b>
 
+
 <small
 style="
 display:block;
@@ -3559,6 +3544,7 @@ ${a.late_minutes || 0} min
 <td>
 ${esc(a.observation || "-")}
 </td>
+
 
 </tr>
 
