@@ -1,9 +1,12 @@
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
-const API = window.API_BASE || "https://permisosfun-1.onrender.com/api";
+const API =
+  window.API_BASE ||
+  "https://permisosfun-1.onrender.com/api";
 
-let token = localStorage.getItem("token") || "";
+let token =
+  localStorage.getItem("token") || "";
 
 /* =========================================================
    UTILIDADES
@@ -18,40 +21,61 @@ function esc(s) {
     .replace(/'/g, "&#039;");
 }
 
-const today = new Date().toISOString().slice(0, 10);
+const today =
+  new Date()
+    .toISOString()
+    .slice(0, 10);
 
 function toast(s) {
+
   const e = $("#toast");
 
   if (!e) return;
 
   e.textContent = s;
+
   e.classList.add("toast-show");
 
   setTimeout(() => {
     e.classList.remove("toast-show");
   }, 2500);
+
 }
 
 function openModal(html) {
-  const modalContent = $("#modalContent");
-  const modal = $("#modal");
+
+  const modalContent =
+    $("#modalContent");
+
+  const modal =
+    $("#modal");
 
   if (!modalContent || !modal) return;
 
-  modalContent.innerHTML = html;
-  modal.classList.remove("hidden");
+  modalContent.innerHTML =
+    html;
+
+  modal.classList.remove(
+    "hidden"
+  );
+
 }
 
 function closeModal() {
-  const modal = $("#modal");
+
+  const modal =
+    $("#modal");
 
   if (!modal) return;
 
-  modal.classList.add("hidden");
+  modal.classList.add(
+    "hidden"
+  );
+
 }
 
 function initials(n) {
+
   return String(n || "")
     .split(" ")
     .filter(Boolean)
@@ -59,9 +83,11 @@ function initials(n) {
     .map(x => x[0])
     .join("")
     .toUpperCase();
+
 }
 
 function badge(s) {
+
   let c =
     s === "Aprobado"
       ? "green"
@@ -80,6 +106,7 @@ function badge(s) {
       ${esc(s || "-")}
     </span>
   `;
+
 }
 
 /* =========================================================
@@ -87,25 +114,57 @@ function badge(s) {
 ========================================================= */
 
 function showLogin() {
-  $("#landing")?.classList.add("hidden");
-  $("#login")?.classList.remove("hidden");
-  $("#app")?.classList.add("hidden");
+
+  $("#landing")?.classList.add(
+    "hidden"
+  );
+
+  $("#login")?.classList.remove(
+    "hidden"
+  );
+
+  $("#app")?.classList.add(
+    "hidden"
+  );
 
   setTimeout(() => {
+
     $("#user")?.focus();
+
   }, 50);
+
 }
 
 function showLanding() {
-  $("#landing")?.classList.remove("hidden");
-  $("#login")?.classList.add("hidden");
-  $("#app")?.classList.add("hidden");
+
+  $("#landing")?.classList.remove(
+    "hidden"
+  );
+
+  $("#login")?.classList.add(
+    "hidden"
+  );
+
+  $("#app")?.classList.add(
+    "hidden"
+  );
+
 }
 
 function showApp() {
-  $("#landing")?.classList.add("hidden");
-  $("#login")?.classList.add("hidden");
-  $("#app")?.classList.remove("hidden");
+
+  $("#landing")?.classList.add(
+    "hidden"
+  );
+
+  $("#login")?.classList.add(
+    "hidden"
+  );
+
+  $("#app")?.classList.remove(
+    "hidden"
+  );
+
 }
 
 /* =========================================================
@@ -113,72 +172,120 @@ function showApp() {
 ========================================================= */
 
 function headers(json = true) {
+
   const h = {};
 
   if (token) {
-    h.Authorization = "Bearer " + token;
+
+    h.Authorization =
+      "Bearer " + token;
+
   }
 
   if (json) {
-    h["Content-Type"] = "application/json";
+
+    h["Content-Type"] =
+      "application/json";
+
   }
 
   return h;
+
 }
 
 async function api(url, opt = {}) {
-  const r = await fetch(API + url, {
-    ...opt,
-    headers: {
-      ...headers(opt.body !== undefined),
-      ...(opt.headers || {})
-    }
-  });
+
+  const r =
+    await fetch(
+      API + url,
+      {
+        ...opt,
+
+        headers: {
+          ...headers(
+            opt.body !== undefined
+          ),
+
+          ...(opt.headers || {})
+        }
+      }
+    );
 
   if (r.status === 401) {
+
     if (url !== "/login") {
+
       logout();
+
     }
 
-    throw Error("No autorizado");
+    throw Error(
+      "No autorizado"
+    );
+
   }
 
   const contentType =
-    r.headers.get("content-type") || "";
+    r.headers.get(
+      "content-type"
+    ) || "";
 
   let d;
 
-  if (contentType.includes("json")) {
-    d = await r.json();
+  if (
+    contentType.includes(
+      "json"
+    )
+  ) {
+
+    d =
+      await r.json();
+
   } else if (
-    contentType.includes("application/pdf") ||
+    contentType.includes(
+      "application/pdf"
+    ) ||
     contentType.includes(
       "application/vnd.openxmlformats-officedocument"
     )
   ) {
-    d = await r.blob();
+
+    d =
+      await r.blob();
+
   } else {
-    const text = await r.text();
+
+    const text =
+      await r.text();
 
     try {
-      d = JSON.parse(text);
+
+      d =
+        JSON.parse(text);
+
     } catch {
+
       d = {
         error:
           text ||
           "Respuesta inválida del servidor"
       };
+
     }
+
   }
 
   if (!r.ok) {
+
     throw Error(
       d?.error ||
       "Error del servidor"
     );
+
   }
 
   return d;
+
 }
 
 /* =========================================================
@@ -186,13 +293,19 @@ async function api(url, opt = {}) {
 ========================================================= */
 
 function logout() {
-  localStorage.removeItem("token");
+
+  localStorage.removeItem(
+    "token"
+  );
 
   token = "";
 
-  $("#app")?.classList.add("hidden");
+  $("#app")?.classList.add(
+    "hidden"
+  );
 
   showLanding();
+
 }
 
 /* =========================================================
@@ -200,7 +313,9 @@ function logout() {
 ========================================================= */
 
 function documentInfo(p) {
-  const data = p?.document || "";
+
+  const data =
+    p?.document || "";
 
   const name =
     p?.document_name ||
@@ -210,30 +325,37 @@ function documentInfo(p) {
     p?.document_type || "";
 
   if (!data) {
+
     return `
       <div class="empty">
         No se adjuntó documento sustentatorio.
       </div>
     `;
+
   }
 
   const id =
     "documentViewer_" +
-    String(p?.id || Date.now()) +
+    String(
+      p?.id || Date.now()
+    ) +
     "_" +
     Math.random()
       .toString(36)
       .slice(2);
 
-  /* Guardamos el documento en memoria */
   if (!window.__documents) {
+
     window.__documents = {};
+
   }
 
   window.__documents[id] = {
+
     data: data,
     name: name,
     type: type
+
   };
 
   const esImagen =
@@ -242,9 +364,11 @@ function documentInfo(p) {
     type.startsWith("image/");
 
   const esPDF =
-    type === "application/pdf";
+    type ===
+    "application/pdf";
 
   return `
+
     <div
       id="${esc(id)}"
       style="
@@ -265,7 +389,13 @@ function documentInfo(p) {
       >
 
         <span style="font-size:25px;">
-          ${esImagen ? "🖼️" : esPDF ? "📄" : "📎"}
+          ${
+            esImagen
+              ? "🖼️"
+              : esPDF
+              ? "📄"
+              : "📎"
+          }
         </span>
 
         <div>
@@ -281,7 +411,10 @@ function documentInfo(p) {
               margin-top:3px;
             "
           >
-            ${esc(type || "Documento adjunto")}
+            ${esc(
+              type ||
+              "Documento adjunto"
+            )}
           </small>
 
         </div>
@@ -302,7 +435,9 @@ function documentInfo(p) {
               "
             >
               <div
-                id="${esc(id)}_preview"
+                id="${esc(
+                  id
+                )}_preview"
                 style="
                   min-height:80px;
                   display:flex;
@@ -344,7 +479,8 @@ function documentInfo(p) {
                   margin:6px 0 0;
                 "
               >
-                Haz clic en "Ver documento" para abrirlo.
+                Haz clic en "Ver documento"
+                para abrirlo.
               </p>
 
             </div>
@@ -363,7 +499,9 @@ function documentInfo(p) {
         <button
           type="button"
           class="secondary"
-          id="${esc(id)}_open"
+          id="${esc(
+            id
+          )}_open"
           style="
             padding:9px 13px;
             cursor:pointer;
@@ -375,7 +513,9 @@ function documentInfo(p) {
         <button
           type="button"
           class="primary"
-          id="${esc(id)}_download"
+          id="${esc(
+            id
+          )}_download"
           style="
             padding:9px 13px;
             cursor:pointer;
@@ -387,7 +527,9 @@ function documentInfo(p) {
       </div>
 
     </div>
+
   `;
+
 }
 
 /* =========================================================
@@ -395,37 +537,48 @@ function documentInfo(p) {
 ========================================================= */
 
 function openDocument(id) {
+
   const doc =
     window.__documents?.[id];
 
   if (!doc || !doc.data) {
-    toast("No se encontró el documento.");
+
+    toast(
+      "No se encontró el documento."
+    );
+
     return;
+
   }
 
   try {
 
     const nuevaVentana =
-      window.open("", "_blank");
+      window.open(
+        "",
+        "_blank"
+      );
 
     if (!nuevaVentana) {
+
       toast(
         "El navegador bloqueó la nueva pestaña. Permite ventanas emergentes."
       );
-      return;
-    }
 
-    /*
-      IMÁGENES
-    */
+      return;
+
+    }
 
     if (
       doc.type &&
-      doc.type.startsWith("image/")
+      doc.type.startsWith(
+        "image/"
+      )
     ) {
 
       nuevaVentana.document.title =
-        doc.name || "Documento";
+        doc.name ||
+        "Documento";
 
       nuevaVentana.document.body.style.margin =
         "0";
@@ -456,10 +609,12 @@ function openDocument(id) {
           "img"
         );
 
-      img.src = doc.data;
+      img.src =
+        doc.data;
 
       img.alt =
-        doc.name || "Documento";
+        doc.name ||
+        "Documento";
 
       img.style.maxWidth =
         "95vw";
@@ -478,11 +633,8 @@ function openDocument(id) {
       );
 
       return;
-    }
 
-    /*
-      PDF
-    */
+    }
 
     if (
       doc.type ===
@@ -493,11 +645,8 @@ function openDocument(id) {
         doc.data;
 
       return;
-    }
 
-    /*
-      OTROS ARCHIVOS
-    */
+    }
 
     nuevaVentana.location.href =
       doc.data;
@@ -512,7 +661,9 @@ function openDocument(id) {
     toast(
       "No se pudo abrir el documento."
     );
+
   }
+
 }
 
 /* =========================================================
@@ -520,18 +671,26 @@ function openDocument(id) {
 ========================================================= */
 
 function downloadDocument(id) {
+
   const doc =
     window.__documents?.[id];
 
   if (!doc || !doc.data) {
-    toast("No se encontró el documento.");
+
+    toast(
+      "No se encontró el documento."
+    );
+
     return;
+
   }
 
   try {
 
     const a =
-      document.createElement("a");
+      document.createElement(
+        "a"
+      );
 
     a.href =
       doc.data;
@@ -543,7 +702,9 @@ function downloadDocument(id) {
     a.style.display =
       "none";
 
-    document.body.appendChild(a);
+    document.body.appendChild(
+      a
+    );
 
     a.click();
 
@@ -563,7 +724,9 @@ function downloadDocument(id) {
     toast(
       "No se pudo descargar el documento."
     );
+
   }
+
 }
 
 /* =========================================================
@@ -595,6 +758,7 @@ document.addEventListener(
       openDocument(id);
 
       return;
+
     }
 
     const btnDescargar =
@@ -618,6 +782,7 @@ document.addEventListener(
       downloadDocument(id);
 
       return;
+
     }
 
   }
@@ -627,162 +792,186 @@ document.addEventListener(
    LOGIN
 ========================================================= */
 
-const loginForm = $("#loginForm");
+const loginForm =
+  $("#loginForm");
 
 if (loginForm) {
 
-  loginForm.onsubmit = async e => {
+  loginForm.onsubmit =
+    async e => {
 
-    e.preventDefault();
+      e.preventDefault();
 
-    const username =
-      $("#user")?.value.trim() || "";
+      const username =
+        $("#user")?.value.trim() ||
+        "";
 
-    const password =
-      $("#pass")?.value || "";
+      const password =
+        $("#pass")?.value ||
+        "";
 
-    if (!username || !password) {
+      if (
+        !username ||
+        !password
+      ) {
 
-      toast(
-        "Ingresa usuario y contraseña"
-      );
-
-      return;
-    }
-
-    try {
-
-      const d =
-        await api(
-          "/login",
-          {
-            method:"POST",
-
-            body:
-              JSON.stringify({
-                username,
-                password
-              })
-          }
+        toast(
+          "Ingresa usuario y contraseña"
         );
 
-      if (!d.token) {
-
-        throw Error(
-          "El servidor no devolvió el token de acceso"
-        );
+        return;
 
       }
 
-      token =
-        d.token;
+      try {
 
-      localStorage.setItem(
-        "token",
-        token
-      );
+        const d =
+          await api(
+            "/login",
+            {
+              method: "POST",
 
-      showApp();
+              body:
+                JSON.stringify({
+                  username,
+                  password
+                })
+            }
+          );
 
-      if ($("#sideName")) {
+        if (!d.token) {
 
-        $("#sideName").textContent =
+          throw Error(
+            "El servidor no devolvió el token de acceso"
+          );
+
+        }
+
+        token =
+          d.token;
+
+        localStorage.setItem(
+          "token",
+          token
+        );
+
+        showApp();
+
+        if ($("#sideName")) {
+
+          $("#sideName").textContent =
+            d.user?.name ||
+            d.user?.username ||
+            username;
+
+        }
+
+        updateSideAvatar(
           d.user?.name ||
           d.user?.username ||
-          username;
+          username
+        );
+
+        await loadDashboard();
+
+        await loadNotifications();
+
+      } catch (x) {
+
+        console.error(
+          "ERROR LOGIN:",
+          x
+        );
+
+        toast(
+          x.message ||
+          "No se pudo iniciar sesión"
+        );
 
       }
 
-      await loadDashboard();
-
-      await loadNotifications();
-
-      setInterval(
-        loadNotifications,
-        15000
-      );
-
-    } catch (x) {
-
-      console.error(
-        "ERROR LOGIN:",
-        x
-      );
-
-      toast(
-        x.message ||
-        "No se pudo iniciar sesión"
-      );
-
-    }
-
-  };
+    };
 
 }
 
 if ($("#logout")) {
+
   $("#logout").onclick =
     logout;
+
 }
 
 if ($("#openLogin")) {
+
   $("#openLogin").onclick =
     showLogin;
+
 }
 
 if ($("#openLogin2")) {
+
   $("#openLogin2").onclick =
     showLogin;
+
 }
 
 /* =========================================================
    NAVEGACIÓN
 ========================================================= */
 
-$$(".nav").forEach(b => {
+$$(".nav").forEach(
+  b => {
 
-  b.onclick = () => {
+    b.onclick = () => {
 
-    $$(".nav").forEach(
-      x =>
-        x.classList.remove(
-          "active"
-        )
-    );
+      $$(".nav").forEach(
+        x =>
+          x.classList.remove(
+            "active"
+          )
+      );
 
-    b.classList.add(
-      "active"
-    );
+      b.classList.add(
+        "active"
+      );
 
-    const pages = {
+      const pages = {
 
-      dashboard:
-        loadDashboard,
+        dashboard:
+          loadDashboard,
 
-      workers:
-        loadWorkers,
+        workers:
+          loadWorkers,
 
-      permissions:
-        loadPermissions,
+        permissions:
+          loadPermissions,
 
-      attendance:
-        loadAttendance,
+        attendance:
+          loadAttendance,
 
-      reports:
-        loadReports
+        reports:
+          loadReports,
+
+        security:
+          loadSecurity
+
+      };
+
+      const fn =
+        pages[
+          b.dataset.page
+        ];
+
+      if (fn) {
+
+        fn();
+
+      }
 
     };
 
-    const fn =
-      pages[b.dataset.page];
-
-    if (fn) {
-      fn();
-    }
-
-  };
-
-});
+  }
+);
 
 /* =========================================================
    FECHA ACTUAL
@@ -794,9 +983,9 @@ if ($("#todayLabel")) {
     new Date().toLocaleDateString(
       "es-PE",
       {
-        weekday:"long",
-        day:"2-digit",
-        month:"long"
+        weekday: "long",
+        day: "2-digit",
+        month: "long"
       }
     );
 
@@ -822,6 +1011,12 @@ if (token) {
 
       }
 
+      updateSideAvatar(
+        d.name ||
+        d.username ||
+        "Administrador"
+      );
+
     })
     .catch(() => {
 
@@ -832,11 +1027,6 @@ if (token) {
   loadDashboard();
 
   loadNotifications();
-
-  setInterval(
-    loadNotifications,
-    15000
-  );
 
 } else {
 
@@ -901,12 +1091,16 @@ async function loadDashboard() {
       );
 
     const byType =
-      Array.isArray(d.byType)
+      Array.isArray(
+        d.byType
+      )
         ? d.byType
         : [];
 
     const ranking =
-      Array.isArray(d.ranking)
+      Array.isArray(
+        d.ranking
+      )
         ? d.ranking
         : [];
 
@@ -1404,7 +1598,8 @@ function workerRows(rows) {
     rows.map(w => {
 
       const status =
-        w.status === "Inactivo"
+        w.status ===
+        "Inactivo"
           ? "Inactivo"
           : "Activo";
 
@@ -1523,7 +1718,8 @@ async function filterWorkers() {
   try {
 
     const search =
-      $("#workerSearch")?.value || "";
+      $("#workerSearch")?.value ||
+      "";
 
     const data =
       await api(
@@ -1569,9 +1765,10 @@ async function deleteWorker(id) {
   try {
 
     await api(
-      "/workers/" + id,
+      "/workers/" +
+      id,
       {
-        method:"DELETE"
+        method: "DELETE"
       }
     );
 
@@ -1608,13 +1805,14 @@ async function activateWorker(id) {
   try {
 
     await api(
-      "/workers/" + id,
+      "/workers/" +
+      id,
       {
-        method:"PUT",
+        method: "PUT",
 
         body:
           JSON.stringify({
-            status:"Activo"
+            status: "Activo"
           })
       }
     );
@@ -1840,7 +2038,8 @@ Guardar trabajador
 
         await api(
           w.id
-            ? "/workers/" + w.id
+            ? "/workers/" +
+              w.id
             : "/workers",
 
           {
@@ -2304,7 +2503,9 @@ function getWorkerForPermission(
       );
 
     if (byId) {
+
       return byId;
+
     }
 
   }
@@ -2326,12 +2527,15 @@ function getWorkerForPermission(
       );
 
     if (byDni) {
+
       return byDni;
+
     }
 
   }
 
   return null;
+
 }
 
 /* =========================================================
@@ -2441,7 +2645,8 @@ ${badge(p.status)}
 <td>
 
 ${
-  p.status === "Pendiente"
+  p.status ===
+  "Pendiente"
 
     ?
 
@@ -2461,8 +2666,8 @@ Revisar
 class="secondary"
 onclick='permissionDetail(${JSON.stringify({
   ...p,
-  names:workerName,
-  dni:workerDni
+  names: workerName,
+  dni: workerDni
 }).replace(/'/g, "&#039;")}'
 >
 Ver
@@ -2528,7 +2733,7 @@ async function deletePermission(id) {
       "/permissions/" +
       id,
       {
-        method:"DELETE"
+        method: "DELETE"
       }
     );
 
@@ -2560,13 +2765,16 @@ async function filterPermissions() {
   try {
 
     const search =
-      $("#psearch")?.value || "";
+      $("#psearch")?.value ||
+      "";
 
     const status =
-      $("#pstatus")?.value || "";
+      $("#pstatus")?.value ||
+      "";
 
     const type =
-      $("#ptype")?.value || "";
+      $("#ptype")?.value ||
+      "";
 
     const u =
       "/permissions?search=" +
@@ -2866,7 +3074,7 @@ Registrar
         await api(
           "/permissions",
           {
-            method:"POST",
+            method: "POST",
 
             body:
               JSON.stringify(
@@ -3422,21 +3630,19 @@ Cerrar
 
 `);
 
-    /*
-      Cargar vista previa de imagen
-      DESPUÉS de insertar el modal.
-    */
-
     if (
       p.document &&
       p.document_type &&
-      p.document_type.startsWith("image/")
+      p.document_type.startsWith(
+        "image/"
+      )
     ) {
 
       setTimeout(() => {
 
         const documentos =
-          window.__documents || {};
+          window.__documents ||
+          {};
 
         const ids =
           Object.keys(
@@ -3444,14 +3650,17 @@ Cerrar
           );
 
         const id =
-          ids[ids.length - 1];
+          ids[
+            ids.length - 1
+          ];
 
         const doc =
           documentos[id];
 
         const preview =
           document.getElementById(
-            id + "_preview"
+            id +
+            "_preview"
           );
 
         if (
@@ -3561,6 +3770,7 @@ async function decidePermission(
     );
 
     return;
+
   }
 
   if (
@@ -3585,7 +3795,7 @@ async function decidePermission(
       id +
       "/status",
       {
-        method:"PUT",
+        method: "PUT",
 
         body:
           JSON.stringify({
@@ -3642,7 +3852,7 @@ async function setPermission(
       id +
       "/status",
       {
-        method:"PUT",
+        method: "PUT",
 
         body:
           JSON.stringify({
@@ -3878,20 +4088,19 @@ ${documentInfo(p)}
 
 `);
 
-  /*
-    Vista previa de imagen para el detalle
-  */
-
   if (
     p.document &&
     p.document_type &&
-    p.document_type.startsWith("image/")
+    p.document_type.startsWith(
+      "image/"
+    )
   ) {
 
     setTimeout(() => {
 
       const documentos =
-        window.__documents || {};
+        window.__documents ||
+        {};
 
       const ids =
         Object.keys(
@@ -3899,14 +4108,17 @@ ${documentInfo(p)}
         );
 
       const id =
-        ids[ids.length - 1];
+        ids[
+          ids.length - 1
+        ];
 
       const doc =
         documentos[id];
 
       const preview =
         document.getElementById(
-          id + "_preview"
+          id +
+          "_preview"
         );
 
       if (
@@ -4458,7 +4670,7 @@ Guardar
         await api(
           "/attendance",
           {
-            method:"POST",
+            method: "POST",
 
             body:
               JSON.stringify(
@@ -4683,5 +4895,560 @@ async function downloadReport(type) {
     );
 
   }
+
+}
+
+/* =========================================================
+   SEGURIDAD Y ACCESO
+========================================================= */
+
+function loadSecurity() {
+
+  if ($("#pageTitle")) {
+
+    $("#pageTitle").textContent =
+      "Seguridad y acceso";
+
+  }
+
+  $("#content").innerHTML = `
+
+    <div class="page-head">
+
+      <div>
+
+        <h3>
+          Seguridad y acceso
+        </h3>
+
+        <p>
+          Administra de forma privada tus
+          credenciales de acceso al sistema.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div class="grid2">
+
+
+      <!-- CAMBIAR USUARIO -->
+
+      <div class="card">
+
+        <h4>
+          🔐 Cambiar usuario
+        </h4>
+
+        <p
+          style="
+            color:#718096;
+            font-size:13px;
+            line-height:1.6;
+          "
+        >
+          Puedes cambiar el nombre de usuario
+          utilizado para ingresar al sistema.
+        </p>
+
+
+        <form
+          id="usernameChangeForm"
+          style="margin-top:18px;"
+        >
+
+          <div class="field">
+
+            <label>
+              Contraseña actual
+            </label>
+
+            <input
+              class="input"
+              type="password"
+              id="currentPasswordUser"
+              autocomplete="current-password"
+              required
+            >
+
+          </div>
+
+
+          <div class="field">
+
+            <label>
+              Nuevo usuario
+            </label>
+
+            <input
+              class="input"
+              type="text"
+              id="newUsername"
+              minlength="4"
+              autocomplete="username"
+              placeholder="Nuevo nombre de usuario"
+              required
+            >
+
+          </div>
+
+
+          <div
+            class="modal-actions"
+            style="margin-top:18px;"
+          >
+
+            <button
+              type="submit"
+              class="primary"
+            >
+              Cambiar usuario
+            </button>
+
+          </div>
+
+        </form>
+
+      </div>
+
+
+      <!-- CAMBIAR CONTRASEÑA -->
+
+      <div class="card">
+
+        <h4>
+          🔑 Cambiar contraseña
+        </h4>
+
+        <p
+          style="
+            color:#718096;
+            font-size:13px;
+            line-height:1.6;
+          "
+        >
+          Cambia tu contraseña de acceso.
+          Utiliza una contraseña de al menos
+          8 caracteres.
+        </p>
+
+
+        <form
+          id="passwordChangeForm"
+          style="margin-top:18px;"
+        >
+
+          <div class="field">
+
+            <label>
+              Contraseña actual
+            </label>
+
+            <input
+              class="input"
+              type="password"
+              id="currentPassword"
+              autocomplete="current-password"
+              required
+            >
+
+          </div>
+
+
+          <div class="field">
+
+            <label>
+              Nueva contraseña
+            </label>
+
+            <input
+              class="input"
+              type="password"
+              id="newPassword"
+              minlength="8"
+              autocomplete="new-password"
+              placeholder="Mínimo 8 caracteres"
+              required
+            >
+
+          </div>
+
+
+          <div class="field">
+
+            <label>
+              Confirmar nueva contraseña
+            </label>
+
+            <input
+              class="input"
+              type="password"
+              id="confirmPassword"
+              minlength="8"
+              autocomplete="new-password"
+              placeholder="Repite la nueva contraseña"
+              required
+            >
+
+          </div>
+
+
+          <div
+            class="modal-actions"
+            style="margin-top:18px;"
+          >
+
+            <button
+              type="submit"
+              class="primary"
+            >
+              Cambiar contraseña
+            </button>
+
+          </div>
+
+        </form>
+
+      </div>
+
+
+    </div>
+
+
+    <!-- RECOMENDACIONES -->
+
+    <div
+      class="card"
+      style="margin-top:18px;"
+    >
+
+      <h4>
+        🛡️ Recomendaciones de seguridad
+      </h4>
+
+      <div
+        style="
+          display:grid;
+          gap:10px;
+          margin-top:12px;
+          color:#4a5568;
+          font-size:13px;
+        "
+      >
+
+        <div>
+          ✓ No compartas tus credenciales.
+        </div>
+
+        <div>
+          ✓ Utiliza una contraseña diferente
+          a la de otros servicios.
+        </div>
+
+        <div>
+          ✓ No guardes tus credenciales en
+          archivos públicos del proyecto.
+        </div>
+
+        <div>
+          ✓ Cierra sesión cuando termines.
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+
+
+  /* =======================================================
+     CAMBIAR USUARIO
+  ======================================================= */
+
+  const usernameForm =
+    $("#usernameChangeForm");
+
+  if (usernameForm) {
+
+    usernameForm.onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const currentPassword =
+          $("#currentPasswordUser")?.value ||
+          "";
+
+        const newUsername =
+          $("#newUsername")?.value.trim() ||
+          "";
+
+        if (!currentPassword) {
+
+          toast(
+            "Ingresa tu contraseña actual."
+          );
+
+          return;
+
+        }
+
+        if (
+          newUsername.length < 4
+        ) {
+
+          toast(
+            "El nuevo usuario debe tener al menos 4 caracteres."
+          );
+
+          return;
+
+        }
+
+        try {
+
+          const d =
+            await api(
+              "/account",
+              {
+                method: "PUT",
+
+                body:
+                  JSON.stringify({
+                    currentPassword,
+                    newUsername
+                  })
+              }
+            );
+
+
+          if (!d.token) {
+
+            throw Error(
+              "El servidor no devolvió el nuevo token."
+            );
+
+          }
+
+
+          token =
+            d.token;
+
+
+          localStorage.setItem(
+            "token",
+            token
+          );
+
+
+          if ($("#sideName")) {
+
+            $("#sideName").textContent =
+              d.user?.name ||
+              d.user?.username ||
+              "Administrador";
+
+          }
+
+
+          updateSideAvatar(
+            d.user?.name ||
+            d.user?.username ||
+            "Administrador"
+          );
+
+
+          usernameForm.reset();
+
+
+          toast(
+            "Usuario actualizado correctamente."
+          );
+
+
+        } catch (e) {
+
+          console.error(
+            "CAMBIO DE USUARIO:",
+            e
+          );
+
+          toast(
+            e.message ||
+            "No se pudo cambiar el usuario."
+          );
+
+        }
+
+      };
+
+  }
+
+
+  /* =======================================================
+     CAMBIAR CONTRASEÑA
+  ======================================================= */
+
+  const passwordForm =
+    $("#passwordChangeForm");
+
+  if (passwordForm) {
+
+    passwordForm.onsubmit =
+      async e => {
+
+        e.preventDefault();
+
+        const currentPassword =
+          $("#currentPassword")?.value ||
+          "";
+
+        const newPassword =
+          $("#newPassword")?.value ||
+          "";
+
+        const confirmPassword =
+          $("#confirmPassword")?.value ||
+          "";
+
+
+        if (!currentPassword) {
+
+          toast(
+            "Ingresa tu contraseña actual."
+          );
+
+          return;
+
+        }
+
+
+        if (
+          newPassword.length < 8
+        ) {
+
+          toast(
+            "La nueva contraseña debe tener al menos 8 caracteres."
+          );
+
+          return;
+
+        }
+
+
+        if (
+          newPassword !==
+          confirmPassword
+        ) {
+
+          toast(
+            "Las nuevas contraseñas no coinciden."
+          );
+
+          return;
+
+        }
+
+
+        try {
+
+          const d =
+            await api(
+              "/account",
+              {
+                method: "PUT",
+
+                body:
+                  JSON.stringify({
+                    currentPassword,
+                    newPassword,
+                    confirmPassword
+                  })
+              }
+            );
+
+
+          if (!d.token) {
+
+            throw Error(
+              "El servidor no devolvió el nuevo token."
+            );
+
+          }
+
+
+          token =
+            d.token;
+
+
+          localStorage.setItem(
+            "token",
+            token
+          );
+
+
+          if ($("#sideName")) {
+
+            $("#sideName").textContent =
+              d.user?.name ||
+              d.user?.username ||
+              "Administrador";
+
+          }
+
+
+          updateSideAvatar(
+            d.user?.name ||
+            d.user?.username ||
+            "Administrador"
+          );
+
+
+          passwordForm.reset();
+
+
+          toast(
+            "Contraseña actualizada correctamente."
+          );
+
+
+        } catch (e) {
+
+          console.error(
+            "CAMBIO DE CONTRASEÑA:",
+            e
+          );
+
+          toast(
+            e.message ||
+            "No se pudo cambiar la contraseña."
+          );
+
+        }
+
+      };
+
+  }
+
+}
+
+/* =========================================================
+   AVATAR DEL ADMINISTRADOR
+========================================================= */
+
+function updateSideAvatar(name) {
+
+  const avatar =
+    $("#sideAvatar");
+
+  if (!avatar) return;
+
+  avatar.textContent =
+    initials(
+      name || "A"
+    ) ||
+    "A";
 
 }
