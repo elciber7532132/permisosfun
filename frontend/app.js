@@ -9,16 +9,14 @@ let token = localStorage.getItem("token") || "";
    UTILIDADES
 ========================================================= */
 
-const esc = s => String(s ?? "").replace(
-  /[&<>"']/g,
-  m => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;"
-  }[m])
-);
+function esc(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -129,17 +127,13 @@ function headers(json = true) {
 }
 
 async function api(url, opt = {}) {
-  const r = await fetch(
-    API + url,
-    {
-      ...opt,
-
-      headers: {
-        ...headers(opt.body !== undefined),
-        ...(opt.headers || {})
-      }
+  const r = await fetch(API + url, {
+    ...opt,
+    headers: {
+      ...headers(opt.body !== undefined),
+      ...(opt.headers || {})
     }
-  );
+  });
 
   if (r.status === 401) {
     if (url !== "/login") {
@@ -155,20 +149,15 @@ async function api(url, opt = {}) {
   let d;
 
   if (contentType.includes("json")) {
-
     d = await r.json();
-
   } else if (
     contentType.includes("application/pdf") ||
     contentType.includes(
       "application/vnd.openxmlformats-officedocument"
     )
   ) {
-
     d = await r.blob();
-
   } else {
-
     const text = await r.text();
 
     try {
@@ -211,7 +200,6 @@ function logout() {
 ========================================================= */
 
 function documentInfo(p) {
-
   const data = p.document || "";
 
   const name =
@@ -319,7 +307,6 @@ function documentInfo(p) {
   `;
 
   if (type.startsWith("image/")) {
-
     html = `
       <div
         style="
@@ -429,9 +416,7 @@ function documentInfo(p) {
 const loginForm = $("#loginForm");
 
 if (loginForm) {
-
   loginForm.onsubmit = async e => {
-
     e.preventDefault();
 
     const username =
@@ -441,7 +426,6 @@ if (loginForm) {
       $("#pass")?.value || "";
 
     if (!username || !password) {
-
       toast(
         "Ingresa usuario y contraseña"
       );
@@ -450,12 +434,10 @@ if (loginForm) {
     }
 
     try {
-
       const d = await api(
         "/login",
         {
           method: "POST",
-
           body: JSON.stringify({
             username,
             password
@@ -464,7 +446,6 @@ if (loginForm) {
       );
 
       if (!d.token) {
-
         throw Error(
           "El servidor no devolvió el token de acceso"
         );
@@ -480,7 +461,6 @@ if (loginForm) {
       showApp();
 
       if ($("#sideName")) {
-
         $("#sideName").textContent =
           d.user?.name ||
           d.user?.username ||
@@ -496,7 +476,6 @@ if (loginForm) {
       );
 
     } catch (x) {
-
       console.error(
         "ERROR LOGIN:",
         x
@@ -527,9 +506,7 @@ if ($("#openLogin2")) {
 ========================================================= */
 
 $$(".nav").forEach(b => {
-
   b.onclick = () => {
-
     $$(".nav").forEach(
       x =>
         x.classList.remove("active")
@@ -559,7 +536,6 @@ $$(".nav").forEach(b => {
 ========================================================= */
 
 if ($("#todayLabel")) {
-
   $("#todayLabel").textContent =
     new Date().toLocaleDateString(
       "es-PE",
@@ -576,20 +552,16 @@ if ($("#todayLabel")) {
 ========================================================= */
 
 if (token) {
-
   showApp();
 
   api("/me")
     .then(d => {
-
       if ($("#sideName")) {
-
         $("#sideName").textContent =
           d.name ||
           d.username ||
           "Administrador";
       }
-
     })
     .catch(() => {
       logout();
@@ -604,7 +576,6 @@ if (token) {
   );
 
 } else {
-
   showLanding();
 }
 
@@ -617,7 +588,6 @@ function layout(
   sub,
   actions = ""
 ) {
-
   if ($("#pageTitle")) {
     $("#pageTitle").textContent =
       title;
@@ -651,9 +621,7 @@ function layout(
 ========================================================= */
 
 async function loadDashboard() {
-
   try {
-
     const d =
       await api("/dashboard");
 
@@ -668,7 +636,6 @@ async function loadDashboard() {
         : [];
 
     $("#content").innerHTML =
-
       layout(
         "Resumen general",
         "Indicadores del entorno empresarial"
@@ -911,9 +878,7 @@ Trabajadores con más registros de permisos
 
 ${
   ranking.length
-
     ?
-
 `
 <div
 class="table-wrap"
@@ -1005,7 +970,6 @@ para ver estadísticas.
 `;
 
   } catch (e) {
-
     console.error(
       "DASHBOARD:",
       e
@@ -1020,9 +984,7 @@ para ver estadísticas.
 ========================================================= */
 
 async function loadWorkers() {
-
   try {
-
     const data =
       await api("/workers");
 
@@ -1032,7 +994,6 @@ async function loadWorkers() {
         : [];
 
     $("#content").innerHTML =
-
       layout(
         "Trabajadores",
         "Registro y administración del personal",
@@ -1119,7 +1080,6 @@ ${workerRows(rows)}
 `;
 
   } catch (e) {
-
     toast(
       e.message ||
       "No se pudieron cargar los trabajadores"
@@ -1132,11 +1092,8 @@ ${workerRows(rows)}
 ========================================================= */
 
 function workerRows(rows) {
-
   return rows.length
-
     ?
-
     rows.map(w => {
 
       const status =
@@ -1252,9 +1209,7 @@ No hay trabajadores registrados.
 ========================================================= */
 
 async function filterWorkers() {
-
   try {
-
     const search =
       $("#workerSearch")?.value || "";
 
@@ -1273,7 +1228,6 @@ async function filterWorkers() {
       workerRows(rows);
 
   } catch (e) {
-
     toast(
       e.message ||
       "No se pudo realizar la búsqueda"
@@ -1286,7 +1240,6 @@ async function filterWorkers() {
 ========================================================= */
 
 async function deleteWorker(id) {
-
   const confirmar =
     confirm(
       "¿Estás seguro de que deseas eliminar este trabajador?\n\n" +
@@ -1296,7 +1249,6 @@ async function deleteWorker(id) {
   if (!confirmar) return;
 
   try {
-
     await api(
       "/workers/" + id,
       {
@@ -1312,7 +1264,6 @@ async function deleteWorker(id) {
     await loadDashboard();
 
   } catch (e) {
-
     toast(
       e.message ||
       "No se pudo eliminar el trabajador"
@@ -1325,7 +1276,6 @@ async function deleteWorker(id) {
 ========================================================= */
 
 async function activateWorker(id) {
-
   const confirmar =
     confirm(
       "¿Deseas volver a activar este trabajador?"
@@ -1334,12 +1284,10 @@ async function activateWorker(id) {
   if (!confirmar) return;
 
   try {
-
     await api(
       "/workers/" + id,
       {
         method: "PUT",
-
         body: JSON.stringify({
           status: "Activo"
         })
@@ -1354,7 +1302,6 @@ async function activateWorker(id) {
     await loadDashboard();
 
   } catch (e) {
-
     toast(
       e.message ||
       "No se pudo activar el trabajador"
@@ -1367,7 +1314,6 @@ async function activateWorker(id) {
 ========================================================= */
 
 function workerForm(w = {}) {
-
   openModal(`
 
 <h3 class="modal-title">
@@ -1554,7 +1500,6 @@ Guardar trabajador
 
   $("#workerForm").onsubmit =
     async e => {
-
       e.preventDefault();
 
       const o =
@@ -1563,7 +1508,6 @@ Guardar trabajador
         );
 
       try {
-
         await api(
           w.id
             ? "/workers/" + w.id
@@ -1590,7 +1534,6 @@ Guardar trabajador
         await loadDashboard();
 
       } catch (x) {
-
         toast(x.message);
       }
     };
@@ -1601,9 +1544,7 @@ Guardar trabajador
 ========================================================= */
 
 async function workerHistory(id) {
-
   try {
-
     const d =
       await api(
         "/workers/" +
@@ -1728,9 +1669,7 @@ style="margin-top:12px"
 
 ${
   d.permissions.length
-
     ?
-
 `
 ${d.permissions
   .slice(0, 8)
@@ -1776,7 +1715,6 @@ Sin registros.
 `);
 
   } catch (e) {
-
     toast(
       e.message ||
       "No se pudo cargar el historial"
@@ -1789,9 +1727,7 @@ Sin registros.
 ========================================================= */
 
 async function loadPermissions() {
-
   try {
-
     const data =
       await api("/permissions");
 
@@ -1809,7 +1745,6 @@ async function loadPermissions() {
         : [];
 
     $("#content").innerHTML =
-
       layout(
         "Permisos y salidas",
         "Solicitudes, autorizaciones y control de salidas",
@@ -1971,7 +1906,6 @@ ${permissionRows(rows, workers)}
 `;
 
   } catch (e) {
-
     toast(
       e.message ||
       "No se pudieron cargar los permisos"
@@ -1987,12 +1921,10 @@ function getWorkerForPermission(
   p,
   workers = []
 ) {
-
   if (
     p.worker_id !== undefined &&
     p.worker_id !== null
   ) {
-
     const byId =
       workers.find(
         w =>
@@ -2006,7 +1938,6 @@ function getWorkerForPermission(
   }
 
   if (p.dni) {
-
     const dniPermiso =
       String(p.dni).trim();
 
@@ -2033,11 +1964,8 @@ function permissionRows(
   rows,
   workers = []
 ) {
-
   return rows.length
-
     ?
-
     rows.map(p => {
 
       const worker =
@@ -2133,9 +2061,7 @@ ${badge(p.status)}
 
 ${
   p.status === "Pendiente"
-
     ?
-
 `
 <button
 class="primary"
@@ -2201,7 +2127,6 @@ No hay permisos registrados.
 ========================================================= */
 
 async function deletePermission(id) {
-
   const confirmar =
     confirm(
       "¿Estás seguro de que deseas eliminar este registro de permiso?\n\n" +
@@ -2211,7 +2136,6 @@ async function deletePermission(id) {
   if (!confirmar) return;
 
   try {
-
     await api(
       "/permissions/" + id,
       {
@@ -2228,7 +2152,6 @@ async function deletePermission(id) {
     await loadDashboard();
 
   } catch (e) {
-
     toast(
       e.message ||
       "No se pudo eliminar el permiso"
@@ -2241,9 +2164,7 @@ async function deletePermission(id) {
 ========================================================= */
 
 async function filterPermissions() {
-
   try {
-
     const search =
       $("#psearch")?.value || "";
 
@@ -2284,7 +2205,6 @@ async function filterPermissions() {
       );
 
   } catch (e) {
-
     toast(
       e.message ||
       "No se pudieron filtrar los permisos"
@@ -2297,7 +2217,6 @@ async function filterPermissions() {
 ========================================================= */
 
 async function permissionForm() {
-
   const data =
     await api("/workers");
 
@@ -2528,11 +2447,9 @@ Registrar
 
   $("#permissionForm").onsubmit =
     async e => {
-
       e.preventDefault();
 
       try {
-
         await api(
           "/permissions",
           {
@@ -2558,7 +2475,6 @@ Registrar
         await loadDashboard();
 
       } catch (x) {
-
         toast(x.message);
       }
     };
@@ -2569,9 +2485,7 @@ Registrar
 ========================================================= */
 
 async function loadNotifications() {
-
   try {
-
     const d =
       await api("/notifications");
 
@@ -2589,7 +2503,6 @@ async function loadNotifications() {
     );
 
   } catch (e) {
-
     console.error(
       "NOTIFICACIONES:",
       e
@@ -2598,9 +2511,7 @@ async function loadNotifications() {
 }
 
 async function showNotifications() {
-
   try {
-
     const d =
       await api("/notifications");
 
@@ -2628,9 +2539,7 @@ async function showNotifications() {
 
 ${
   latest.length
-
     ?
-
     latest.map(x => {
 
       const worker =
@@ -2724,7 +2633,6 @@ Ver todos los permisos
 `);
 
   } catch (e) {
-
     toast(
       e.message ||
       "No se pudieron cargar las notificaciones"
@@ -2737,9 +2645,7 @@ Ver todos los permisos
 ========================================================= */
 
 async function reviewPermission(id) {
-
   try {
-
     const data =
       await api("/permissions");
 
@@ -2756,7 +2662,6 @@ async function reviewPermission(id) {
       );
 
     if (!p) {
-
       return toast(
         "No se encontró la solicitud"
       );
@@ -2959,7 +2864,6 @@ ${documentInfo(p)}
 
 ${
   p.status === "Pendiente"
-
     ?
 
 `
@@ -3050,7 +2954,6 @@ Cerrar
 `);
 
   } catch (e) {
-
     toast(
       e.message ||
       "No se pudo abrir la solicitud"
@@ -3066,7 +2969,6 @@ async function decidePermission(
   id,
   status
 ) {
-
   const reason =
     $("#decisionReason")?.value ||
     "";
@@ -3075,7 +2977,6 @@ async function decidePermission(
     status === "Rechazado" &&
     !reason.trim()
   ) {
-
     toast(
       "Escribe el motivo del rechazo"
     );
@@ -3090,12 +2991,10 @@ async function decidePermission(
         : "¿Confirmas que deseas RECHAZAR esta solicitud?"
     )
   ) {
-
     return;
   }
 
   try {
-
     await api(
       "/permissions/" +
       id +
@@ -3124,7 +3023,6 @@ async function decidePermission(
     await loadDashboard();
 
   } catch (e) {
-
     toast(e.message);
   }
 }
@@ -3133,18 +3031,15 @@ async function setPermission(
   id,
   status
 ) {
-
   if (
     !confirm(
       `¿Deseas marcar este permiso como ${status}?`
     )
   ) {
-
     return;
   }
 
   try {
-
     await api(
       "/permissions/" +
       id +
@@ -3167,7 +3062,6 @@ async function setPermission(
     await loadDashboard();
 
   } catch (e) {
-
     toast(e.message);
   }
 }
@@ -3177,7 +3071,6 @@ async function setPermission(
 ========================================================= */
 
 function permissionDetail(p) {
-
   openModal(`
 
 <h3 class="modal-title">
@@ -3375,9 +3268,7 @@ ${documentInfo(p)}
 ========================================================= */
 
 async function loadAttendance() {
-
   try {
-
     const data =
       await api(
         "/attendance?date=" +
@@ -3392,7 +3283,6 @@ async function loadAttendance() {
         : [];
 
     $("#content").innerHTML =
-
       layout(
         "Asistencia",
         "Control diario de entradas, salidas y tardanzas",
@@ -3476,7 +3366,6 @@ ${attendanceRows(rows)}
 `;
 
   } catch (e) {
-
     toast(
       e.message ||
       "No se pudo cargar la asistencia"
@@ -3485,11 +3374,8 @@ ${attendanceRows(rows)}
 }
 
 function attendanceRows(rows) {
-
   return rows.length
-
     ?
-
     rows.map(
       a => `
 
@@ -3571,9 +3457,7 @@ No hay registros para esta fecha.
 }
 
 async function refreshAttendance() {
-
   try {
-
     const data =
       await api(
         "/attendance?date=" +
@@ -3591,7 +3475,6 @@ async function refreshAttendance() {
       attendanceRows(rows);
 
   } catch (e) {
-
     toast(
       e.message ||
       "No se pudo actualizar la asistencia"
@@ -3604,7 +3487,6 @@ async function refreshAttendance() {
 ========================================================= */
 
 async function attendanceForm() {
-
   const data =
     await api("/workers");
 
@@ -3813,11 +3695,9 @@ Guardar
 
   $("#attendanceForm").onsubmit =
     async e => {
-
       e.preventDefault();
 
       try {
-
         await api(
           "/attendance",
           {
@@ -3842,7 +3722,6 @@ Guardar
         await loadDashboard();
 
       } catch (x) {
-
         toast(x.message);
       }
     };
@@ -3853,14 +3732,12 @@ Guardar
 ========================================================= */
 
 function loadReports() {
-
   if ($("#pageTitle")) {
     $("#pageTitle").textContent =
       "Reportes";
   }
 
   $("#content").innerHTML =
-
     layout(
       "Reportes",
       "Exporta información para control administrativo"
@@ -3984,9 +3861,7 @@ Dashboard
 ========================================================= */
 
 async function downloadReport(type) {
-
   try {
-
     const b =
       await api(
         "/reports/" +
@@ -4019,7 +3894,6 @@ async function downloadReport(type) {
     );
 
   } catch (e) {
-
     toast(
       e.message ||
       "No se pudo descargar el reporte"
