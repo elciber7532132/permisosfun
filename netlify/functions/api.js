@@ -23,14 +23,17 @@ async function loadDB() {
   let db = null;
 
   try {
+
     db = JSON.parse(
       fs.readFileSync(DB_FILE, 'utf8')
     );
+
   } catch {}
 
   if (!db) {
 
     db = {
+
       admins: [],
       workers: [],
       permissions: [],
@@ -38,21 +41,29 @@ async function loadDB() {
       signatures: [],
 
       counters: {
+
         workers: 0,
         permissions: 0,
         attendance: 0,
         signatures: 0
+
       }
+
     };
 
     db.admins.push({
+
       id: 1,
+
       username: 'admin',
+
       password: bcrypt.hashSync(
         'admin123',
         10
       ),
+
       name: 'Administrador'
+
     });
 
     fs.mkdirSync(
@@ -70,9 +81,14 @@ async function loadDB() {
         2
       )
     );
+
   }
 
-  /* Compatibilidad con bases antiguas */
+
+  /* =======================================================
+     COMPATIBILIDAD CON BASES ANTIGUAS
+  ======================================================= */
+
   db.admins ||= [];
   db.workers ||= [];
   db.permissions ||= [];
@@ -81,7 +97,9 @@ async function loadDB() {
 
   db.counters ||= {};
 
+
   db.counters.workers ||=
+
     db.workers.reduce(
       (max, x) =>
         Math.max(
@@ -91,7 +109,9 @@ async function loadDB() {
       0
     );
 
+
   db.counters.permissions ||=
+
     db.permissions.reduce(
       (max, x) =>
         Math.max(
@@ -101,7 +121,9 @@ async function loadDB() {
       0
     );
 
+
   db.counters.attendance ||=
+
     db.attendance.reduce(
       (max, x) =>
         Math.max(
@@ -111,7 +133,9 @@ async function loadDB() {
       0
     );
 
+
   db.counters.signatures ||=
+
     db.signatures.reduce(
       (max, x) =>
         Math.max(
@@ -120,6 +144,7 @@ async function loadDB() {
         ),
       0
     );
+
 
   return db;
 }
@@ -142,6 +167,7 @@ async function saveDB(db) {
       2
     )
   );
+
 }
 
 
@@ -151,6 +177,7 @@ function nextId(db, type) {
     (db.counters[type] || 0) + 1;
 
   return db.counters[type];
+
 }
 
 
@@ -164,9 +191,11 @@ function json(
 ) {
 
   return {
+
     statusCode,
 
     headers: {
+
       'Content-Type':
         'application/json',
 
@@ -181,10 +210,14 @@ function json(
 
       'Access-Control-Allow-Methods':
         'GET, POST, PUT, DELETE, OPTIONS'
+
     },
 
-    body: JSON.stringify(body)
+    body:
+      JSON.stringify(body)
+
   };
+
 }
 
 
@@ -199,7 +232,9 @@ function auth(event) {
     event.headers?.Authorization ||
     '';
 
-  if (!h.startsWith('Bearer ')) {
+  if (
+    !h.startsWith('Bearer ')
+  ) {
 
     throw Object.assign(
       new Error(
@@ -209,7 +244,9 @@ function auth(event) {
         statusCode: 401
       }
     );
+
   }
+
 
   try {
 
@@ -228,7 +265,9 @@ function auth(event) {
         statusCode: 401
       }
     );
+
   }
+
 }
 
 
@@ -244,7 +283,9 @@ function parseBody(event) {
       typeof event.body ===
       'object'
     ) {
+
       return event.body || {};
+
     }
 
     return event.body
@@ -254,7 +295,9 @@ function parseBody(event) {
   } catch {
 
     return {};
+
   }
+
 }
 
 
@@ -262,12 +305,206 @@ function qDate(v) {
 
   return String(v || '')
     .slice(0, 10);
+
 }
 
 
 function nowISO() {
 
   return new Date().toISOString();
+
+}
+
+
+/* =========================================================
+   VALIDACIÓN DEL DOCUMENTO
+========================================================= */
+
+function validateDocument(x) {
+
+  const document =
+    String(
+      x.document || ''
+    );
+
+  const documentName =
+    String(
+      x.document_name || ''
+    );
+
+  const documentType =
+    String(
+      x.document_type || ''
+    );
+
+
+  /* -------------------------------------------------------
+     No hay documento
+  ------------------------------------------------------- */
+
+  if (!document) {
+
+    return {
+
+      ok: true,
+
+      document: '',
+      document_name: '',
+      document_type: ''
+
+    };
+
+  }
+
+
+  /* -------------------------------------------------------
+     Tipos permitidos
+  ------------------------------------------------------- */
+
+  const allowedTypes = [
+
+    'image/jpeg',
+    'image/png',
+    'application/pdf'
+
+  ];
+
+
+  if (
+    !allowedTypes.includes(
+      documentType
+    )
+  ) {
+
+    return {
+
+      ok: false,
+
+      error:
+        'El documento debe ser JPG, JPEG, PNG o PDF.'
+
+    };
+
+  }
+
+
+  /* -------------------------------------------------------
+     Verificar formato Base64
+  ------------------------------------------------------- */
+
+  if (
+    !document.startsWith(
+      'data:'
+    )
+  ) {
+
+    return {
+
+      ok: false,
+
+      error:
+        'El documento enviado no tiene un formato válido.'
+
+    };
+
+  }
+
+
+  /* -------------------------------------------------------
+     Verificar que coincida el tipo
+  ------------------------------------------------------- */
+
+  if (
+    !document.startsWith(
+      `data:${documentType};base64,`
+    )
+  ) {
+
+    return {
+
+      ok: false,
+
+      error:
+        'El tipo del documento no coincide con el archivo.'
+
+    };
+
+  }
+
+
+  /* -------------------------------------------------------
+     Calcular tamaño aproximado
+  ------------------------------------------------------- */
+
+  const base64Part =
+    document.split(
+      ','
+    )[1] || '';
+
+
+  const padding =
+    (
+      base64Part.match(
+        /=*$/,
+      ) || ['']
+    )[0].length;
+
+
+  const sizeBytes =
+    Math.floor(
+      base64Part.length * 3 / 4
+    ) - padding;
+
+
+  const maxSize =
+    4 * 1024 * 1024;
+
+
+  if (
+    sizeBytes > maxSize
+  ) {
+
+    return {
+
+      ok: false,
+
+      error:
+        'El documento no puede superar los 4 MB.'
+
+    };
+
+  }
+
+
+  /* -------------------------------------------------------
+     Nombre
+  ------------------------------------------------------- */
+
+  if (
+    documentName.length > 255
+  ) {
+
+    return {
+
+      ok: false,
+
+      error:
+        'El nombre del documento es demasiado largo.'
+
+    };
+
+  }
+
+
+  return {
+
+    ok: true,
+
+    document,
+    document_name: documentName,
+    document_type: documentType
+
+  };
 
 }
 
@@ -287,6 +524,7 @@ function enrichPermission(
         x.id === p.worker_id
     ) || {};
 
+
   return {
 
     ...p,
@@ -304,6 +542,7 @@ function enrichPermission(
       w.area || ''
 
   };
+
 }
 
 
@@ -320,6 +559,7 @@ async function reportExcel(db) {
     wb.addWorksheet(
       'Permisos'
     );
+
 
   ws.columns = [
 
@@ -394,7 +634,9 @@ async function reportExcel(db) {
       key: 'decision_reason',
       width: 35
     }
+
   ];
+
 
   db.permissions
     .map(
@@ -409,19 +651,24 @@ async function reportExcel(db) {
         ws.addRow(p)
     );
 
+
   ws.getRow(1).font = {
     bold: true
   };
 
+
   ws.autoFilter =
     'A1:L1';
+
 
   const buffer =
     await wb.xlsx.writeBuffer();
 
+
   return Buffer.from(
     buffer
   );
+
 }
 
 
@@ -436,13 +683,16 @@ async function reportPDF(db) {
       margin: 40
     });
 
+
   const chunks = [];
+
 
   doc.on(
     'data',
     chunk =>
       chunks.push(chunk)
   );
+
 
   const done =
     new Promise(
@@ -453,11 +703,13 @@ async function reportPDF(db) {
         )
     );
 
+
   doc
     .fontSize(18)
     .text(
       'Reporte de permisos y salidas - Funeraria Martínez'
     );
+
 
   doc
     .moveDown()
@@ -469,7 +721,9 @@ async function reportPDF(db) {
       )
     );
 
+
   doc.moveDown();
+
 
   db.permissions
     .map(
@@ -488,6 +742,7 @@ async function reportPDF(db) {
             `${i + 1}. ${p.date} | ${p.names} (${p.dni})`
           );
 
+
         doc
           .fontSize(9)
           .text(
@@ -495,6 +750,7 @@ async function reportPDF(db) {
               p.position || '-'
             }`
           );
+
 
         doc.text(
           `Tipo: ${p.type} | Horario: ${
@@ -504,9 +760,11 @@ async function reportPDF(db) {
           }`
         );
 
+
         doc.text(
           `Estado: ${p.status}`
         );
+
 
         doc.text(
           `Motivo: ${
@@ -514,11 +772,13 @@ async function reportPDF(db) {
           }`
         );
 
+
         doc.text(
           `Autorizó: ${
             p.approved_by || '-'
           }`
         );
+
 
         if (
           p.decision_reason
@@ -529,21 +789,28 @@ async function reportPDF(db) {
               p.decision_reason
             }`
           );
+
         }
+
 
         doc.moveDown(
           0.7
         );
+
       }
     );
 
+
   doc.end();
 
+
   await done;
+
 
   return Buffer.concat(
     chunks
   );
+
 }
 
 
@@ -556,6 +823,7 @@ exports.handler =
 
     const method =
       event.httpMethod;
+
 
     const path =
       event.path
@@ -589,6 +857,7 @@ exports.handler =
             ok: true
           }
         );
+
       }
 
 
@@ -607,12 +876,14 @@ exports.handler =
         } =
           parseBody(event);
 
+
         const a =
           db.admins.find(
             x =>
               x.username ===
               username
           );
+
 
         if (
           !a ||
@@ -629,7 +900,9 @@ exports.handler =
                 'Usuario o contraseña incorrectos'
             }
           );
+
         }
+
 
         const token =
           jwt.sign(
@@ -642,6 +915,7 @@ exports.handler =
 
               name:
                 a.name
+
             },
 
             SECRET,
@@ -651,6 +925,7 @@ exports.handler =
                 '8h'
             }
           );
+
 
         return json(
           200,
@@ -667,8 +942,10 @@ exports.handler =
                 a.name
 
             }
+
           }
         );
+
       }
 
 
@@ -690,6 +967,7 @@ exports.handler =
               ?.dni || ''
           ).trim();
 
+
         if (!dni) {
 
           return json(
@@ -699,7 +977,9 @@ exports.handler =
                 'Debes enviar el DNI'
             }
           );
+
         }
+
 
         const worker =
           db.workers.find(
@@ -711,22 +991,29 @@ exports.handler =
                 'Inactivo'
           );
 
+
         if (!worker) {
 
           return json(
             404,
             {
+              found: false,
+
               error:
                 'No se encontró un trabajador activo con ese DNI'
             }
           );
+
         }
+
 
         return json(
           200,
           {
 
             ok: true,
+
+            found: true,
 
             worker: {
 
@@ -752,8 +1039,10 @@ exports.handler =
                 worker.email || ''
 
             }
+
           }
         );
+
       }
 
 
@@ -771,10 +1060,12 @@ exports.handler =
         const x =
           parseBody(event);
 
+
         const dni =
           String(
             x.dni || ''
           ).trim();
+
 
         if (!dni) {
 
@@ -785,7 +1076,9 @@ exports.handler =
                 'El DNI es obligatorio'
             }
           );
+
         }
+
 
         if (!x.type) {
 
@@ -796,7 +1089,9 @@ exports.handler =
                 'El tipo de permiso es obligatorio'
             }
           );
+
         }
+
 
         if (!x.date) {
 
@@ -807,7 +1102,9 @@ exports.handler =
                 'La fecha es obligatoria'
             }
           );
+
         }
+
 
         const worker =
           db.workers.find(
@@ -819,6 +1116,7 @@ exports.handler =
                 'Inactivo'
           );
 
+
         if (!worker) {
 
           return json(
@@ -828,7 +1126,36 @@ exports.handler =
                 'No se encontró un trabajador activo con ese DNI'
             }
           );
+
         }
+
+
+        /* =================================================
+           VALIDAR DOCUMENTO
+        ================================================= */
+
+        const documentResult =
+          validateDocument(x);
+
+
+        if (
+          !documentResult.ok
+        ) {
+
+          return json(
+            400,
+            {
+              error:
+                documentResult.error
+            }
+          );
+
+        }
+
+
+        /* =================================================
+           CREAR SOLICITUD
+        ================================================= */
 
         const p = {
 
@@ -859,8 +1186,20 @@ exports.handler =
           observation:
             x.observation || '',
 
+
+          /* -----------------------------------------------
+             DOCUMENTO SUSTENTATORIO
+          ------------------------------------------------ */
+
           document:
-            x.document || '',
+            documentResult.document,
+
+          document_name:
+            documentResult.document_name,
+
+          document_type:
+            documentResult.document_type,
+
 
           status:
             'Pendiente',
@@ -876,13 +1215,19 @@ exports.handler =
 
           created_at:
             nowISO()
+
         };
+
 
         db.permissions.push(
           p
         );
 
-        await saveDB(db);
+
+        await saveDB(
+          db
+        );
+
 
         return json(
           200,
@@ -917,10 +1262,21 @@ exports.handler =
                 p.date,
 
               status:
-                p.status
+                p.status,
+
+              document:
+                Boolean(
+                  p.document
+                ),
+
+              document_name:
+                p.document_name || ''
+
             }
+
           }
         );
+
       }
 
 
@@ -945,6 +1301,7 @@ exports.handler =
           200,
           user
         );
+
       }
 
 
@@ -966,6 +1323,7 @@ exports.handler =
             .trim()
             .toLowerCase();
 
+
         let rows =
           db.workers.filter(
             w => {
@@ -974,18 +1332,14 @@ exports.handler =
                 return true;
               }
 
+
               return [
 
                 w.dni,
-
                 w.names,
-
                 w.position,
-
                 w.area,
-
                 w.phone,
-
                 w.email
 
               ].some(
@@ -998,8 +1352,10 @@ exports.handler =
                       search
                     )
               );
+
             }
           );
+
 
         rows.sort(
           (a, b) =>
@@ -1012,10 +1368,12 @@ exports.handler =
             )
         );
 
+
         return json(
           200,
           rows
         );
+
       }
 
 
@@ -1031,6 +1389,7 @@ exports.handler =
         const x =
           parseBody(event);
 
+
         if (
           !x.dni ||
           !x.names
@@ -1043,12 +1402,15 @@ exports.handler =
                 'DNI y nombres son obligatorios'
             }
           );
+
         }
+
 
         const dni =
           String(
             x.dni
           ).trim();
+
 
         if (
           db.workers.some(
@@ -1066,7 +1428,9 @@ exports.handler =
                 'El DNI ya está registrado'
             }
           );
+
         }
+
 
         const w = {
 
@@ -1107,13 +1471,19 @@ exports.handler =
 
           created_at:
             nowISO()
+
         };
+
 
         db.workers.push(
           w
         );
 
-        await saveDB(db);
+
+        await saveDB(
+          db
+        );
+
 
         return json(
           200,
@@ -1122,6 +1492,7 @@ exports.handler =
             worker: w
           }
         );
+
       }
 
 
@@ -1150,11 +1521,13 @@ exports.handler =
         const id =
           +workerMatch[1];
 
+
         const index =
           db.workers.findIndex(
             w =>
               w.id === id
           );
+
 
         if (index < 0) {
 
@@ -1165,10 +1538,13 @@ exports.handler =
                 'Trabajador no encontrado'
             }
           );
+
         }
+
 
         const x =
           parseBody(event);
+
 
         const newDni =
           String(
@@ -1176,6 +1552,7 @@ exports.handler =
             db.workers[index].dni ||
             ''
           ).trim();
+
 
         const duplicate =
           db.workers.some(
@@ -1186,6 +1563,7 @@ exports.handler =
               ).trim() === newDni
           );
 
+
         if (duplicate) {
 
           return json(
@@ -1195,7 +1573,9 @@ exports.handler =
                 'El DNI ya está registrado en otro trabajador'
             }
           );
+
         }
+
 
         db.workers[index] = {
 
@@ -1210,7 +1590,11 @@ exports.handler =
 
         };
 
-        await saveDB(db);
+
+        await saveDB(
+          db
+        );
+
 
         return json(
           200,
@@ -1223,17 +1607,20 @@ exports.handler =
 
           }
         );
+
       }
 
 
       /* ===================================================
          TRABAJADORES - ELIMINACIÓN FÍSICA
-         
+
          IMPORTANTE:
-         También elimina:
-         - permisos
-         - asistencias
-         - firmas de esos permisos
+
+         Se elimina físicamente SOLO el trabajador
+         seleccionado.
+
+         También se eliminan sus permisos,
+         asistencias y firmas relacionadas.
       =================================================== */
 
       if (
@@ -1258,6 +1645,7 @@ exports.handler =
               w.id === id
           );
 
+
         if (
           workerIndex < 0
         ) {
@@ -1269,6 +1657,7 @@ exports.handler =
                 'Trabajador no encontrado'
             }
           );
+
         }
 
 
@@ -1283,7 +1672,7 @@ exports.handler =
 
 
         /* -----------------------------------------------
-           OBTENER PERMISOS DEL TRABAJADOR
+           OBTENER PERMISOS
         ------------------------------------------------ */
 
         const permissionIds =
@@ -1309,7 +1698,7 @@ exports.handler =
 
 
         /* -----------------------------------------------
-           ELIMINAR PERMISOS
+           ELIMINAR PERMISOS DEL TRABAJADOR
         ------------------------------------------------ */
 
         db.permissions =
@@ -1344,15 +1733,13 @@ exports.handler =
 
 
         /* -----------------------------------------------
-           GUARDAR BASE DE DATOS
+           GUARDAR
         ------------------------------------------------ */
 
-        await saveDB(db);
+        await saveDB(
+          db
+        );
 
-
-        /* -----------------------------------------------
-           RESPUESTA
-        ------------------------------------------------ */
 
         return json(
           200,
@@ -1368,6 +1755,7 @@ exports.handler =
 
           }
         );
+
       }
 
 
@@ -1390,6 +1778,7 @@ exports.handler =
               +workerMatch[1]
           );
 
+
         if (!worker) {
 
           return json(
@@ -1399,7 +1788,9 @@ exports.handler =
                 'Trabajador no encontrado'
             }
           );
+
         }
+
 
         return json(
           200,
@@ -1446,8 +1837,10 @@ exports.handler =
                       )
                     )
                 )
+
           }
         );
+
       }
 
 
@@ -1464,6 +1857,7 @@ exports.handler =
           event
             .queryStringParameters ||
           {};
+
 
         let rows =
           db.permissions.map(
@@ -1482,9 +1876,11 @@ exports.handler =
               qp.search
             ).toLowerCase();
 
+
           rows =
             rows.filter(
               p =>
+
                 String(
                   p.dni || ''
                 )
@@ -1503,6 +1899,7 @@ exports.handler =
                   .toLowerCase()
                   .includes(s)
             );
+
         }
 
 
@@ -1514,6 +1911,7 @@ exports.handler =
                 p.status ===
                 qp.status
             );
+
         }
 
 
@@ -1525,6 +1923,7 @@ exports.handler =
                 p.type ===
                 qp.type
             );
+
         }
 
 
@@ -1536,6 +1935,7 @@ exports.handler =
                 p.date >=
                 qp.from
             );
+
         }
 
 
@@ -1547,6 +1947,7 @@ exports.handler =
                 p.date <=
                 qp.to
             );
+
         }
 
 
@@ -1562,23 +1963,30 @@ exports.handler =
                 )
               );
 
+
             if (
               dateCompare !== 0
             ) {
+
               return dateCompare;
+
             }
+
 
             return (
               Number(b.id) -
               Number(a.id)
             );
+
           }
         );
+
 
         return json(
           200,
           rows
         );
+
       }
 
 
@@ -1594,6 +2002,7 @@ exports.handler =
         const x =
           parseBody(event);
 
+
         if (
           !x.worker_id ||
           !x.type ||
@@ -1607,7 +2016,9 @@ exports.handler =
                 'Trabajador, tipo y fecha son obligatorios'
             }
           );
+
         }
+
 
         const worker =
           db.workers.find(
@@ -1615,6 +2026,7 @@ exports.handler =
               w.id ===
               +x.worker_id
           );
+
 
         if (!worker) {
 
@@ -1625,7 +2037,32 @@ exports.handler =
                 'Trabajador no encontrado'
             }
           );
+
         }
+
+
+        /* =================================================
+           VALIDAR DOCUMENTO
+        ================================================= */
+
+        const documentResult =
+          validateDocument(x);
+
+
+        if (
+          !documentResult.ok
+        ) {
+
+          return json(
+            400,
+            {
+              error:
+                documentResult.error
+            }
+          );
+
+        }
+
 
         const p = {
 
@@ -1657,7 +2094,13 @@ exports.handler =
             x.observation || '',
 
           document:
-            x.document || '',
+            documentResult.document,
+
+          document_name:
+            documentResult.document_name,
+
+          document_type:
+            documentResult.document_type,
 
           status:
             'Pendiente',
@@ -1673,13 +2116,19 @@ exports.handler =
 
           created_at:
             nowISO()
+
         };
+
 
         db.permissions.push(
           p
         );
 
-        await saveDB(db);
+
+        await saveDB(
+          db
+        );
+
 
         return json(
           200,
@@ -1695,12 +2144,13 @@ exports.handler =
 
           }
         );
+
       }
 
 
       /* ===================================================
          PERMISOS - ELIMINAR FÍSICAMENTE
-         
+
          DELETE:
          /permissions/:id
       =================================================== */
@@ -1710,6 +2160,7 @@ exports.handler =
           /^\/permissions\/(\d+)$/
         );
 
+
       if (
         deletePermissionMatch &&
         method === 'DELETE'
@@ -1718,11 +2169,13 @@ exports.handler =
         const id =
           +deletePermissionMatch[1];
 
+
         const index =
           db.permissions.findIndex(
             p =>
               p.id === id
           );
+
 
         if (index < 0) {
 
@@ -1733,7 +2186,9 @@ exports.handler =
                 'Permiso no encontrado'
             }
           );
+
         }
+
 
         const deleted =
           db.permissions[index];
@@ -1750,7 +2205,7 @@ exports.handler =
 
 
         /* -----------------------------------------------
-           ELIMINAR FIRMAS DEL PERMISO
+           ELIMINAR FIRMAS
         ------------------------------------------------ */
 
         db.signatures =
@@ -1764,7 +2219,10 @@ exports.handler =
            GUARDAR
         ------------------------------------------------ */
 
-        await saveDB(db);
+        await saveDB(
+          db
+        );
+
 
         return json(
           200,
@@ -1780,6 +2238,7 @@ exports.handler =
 
           }
         );
+
       }
 
 
@@ -1791,6 +2250,7 @@ exports.handler =
         path.match(
           /^\/permissions\/(\d+)\/status$/
         );
+
 
       if (
         permissionStatusMatch &&
@@ -1804,6 +2264,7 @@ exports.handler =
               +permissionStatusMatch[1]
           );
 
+
         if (!p) {
 
           return json(
@@ -1813,13 +2274,16 @@ exports.handler =
                 'Permiso no encontrado'
             }
           );
+
         }
+
 
         const {
           status,
           reason = ''
         } =
           parseBody(event);
+
 
         if (
           ![
@@ -1838,7 +2302,9 @@ exports.handler =
                 'Estado inválido'
             }
           );
+
         }
+
 
         if (
           status ===
@@ -1855,10 +2321,13 @@ exports.handler =
                 'Debes indicar el motivo del rechazo'
             }
           );
+
         }
+
 
         p.status =
           status;
+
 
         p.approved_by =
           status ===
@@ -1866,16 +2335,19 @@ exports.handler =
             ? ''
             : user.name;
 
+
         p.approved_at =
           status ===
           'Pendiente'
             ? ''
             : nowISO();
 
+
         p.decision_reason =
           String(
             reason || ''
           );
+
 
         db.signatures.push({
 
@@ -1896,9 +2368,14 @@ exports.handler =
 
           signed_at:
             nowISO()
+
         });
 
-        await saveDB(db);
+
+        await saveDB(
+          db
+        );
+
 
         return json(
           200,
@@ -1906,6 +2383,7 @@ exports.handler =
             ok: true
           }
         );
+
       }
 
 
@@ -1923,6 +2401,7 @@ exports.handler =
             .queryStringParameters ||
           {};
 
+
         let rows =
           db.attendance.map(
             a => {
@@ -1933,6 +2412,7 @@ exports.handler =
                     x.id ===
                     a.worker_id
                 ) || {};
+
 
               return {
 
@@ -1951,6 +2431,7 @@ exports.handler =
                   w.position || ''
 
               };
+
             }
           );
 
@@ -1963,6 +2444,7 @@ exports.handler =
                 a.date ===
                 qp.date
             );
+
         }
 
 
@@ -1974,6 +2456,7 @@ exports.handler =
                 a.worker_id ===
                 +qp.worker_id
             );
+
         }
 
 
@@ -1996,10 +2479,12 @@ exports.handler =
             )
         );
 
+
         return json(
           200,
           rows
         );
+
       }
 
 
@@ -2015,6 +2500,7 @@ exports.handler =
         const x =
           parseBody(event);
 
+
         if (
           !x.worker_id ||
           !x.date
@@ -2027,7 +2513,9 @@ exports.handler =
                 'Trabajador y fecha son obligatorios'
             }
           );
+
         }
+
 
         let a =
           db.attendance.find(
@@ -2037,6 +2525,7 @@ exports.handler =
               v.date ===
                 x.date
           );
+
 
         if (!a) {
 
@@ -2053,11 +2542,14 @@ exports.handler =
 
             date:
               x.date
+
           };
+
 
           db.attendance.push(
             a
           );
+
         }
 
 
@@ -2089,7 +2581,11 @@ exports.handler =
           }
         );
 
-        await saveDB(db);
+
+        await saveDB(
+          db
+        );
+
 
         return json(
           200,
@@ -2098,6 +2594,7 @@ exports.handler =
             attendance: a
           }
         );
+
       }
 
 
@@ -2145,6 +2642,7 @@ exports.handler =
                     db
                   );
 
+
                 return {
 
                   id:
@@ -2166,8 +2664,10 @@ exports.handler =
                     x.dni
 
                 };
+
               }
             );
+
 
         return json(
           200,
@@ -2184,6 +2684,7 @@ exports.handler =
 
           }
         );
+
       }
 
 
@@ -2199,6 +2700,7 @@ exports.handler =
         const now =
           new Date();
 
+
         const iso =
           now
             .toISOString()
@@ -2207,18 +2709,22 @@ exports.handler =
               10
             );
 
+
         const month =
           iso.slice(
             0,
             7
           );
 
+
         const weekStart =
           new Date(now);
+
 
         weekStart.setDate(
           now.getDate() - 6
         );
+
 
         const ws =
           weekStart
@@ -2252,6 +2758,7 @@ exports.handler =
         const byType =
           {};
 
+
         permissions.forEach(
           p => {
 
@@ -2268,6 +2775,7 @@ exports.handler =
         const ranking =
           {};
 
+
         permissions.forEach(
           p => {
 
@@ -2278,6 +2786,7 @@ exports.handler =
                   p.worker_id
               );
 
+
             if (w) {
 
               ranking[w.id] =
@@ -2287,6 +2796,7 @@ exports.handler =
                 ) + 1;
 
             }
+
           }
         );
 
@@ -2373,6 +2883,7 @@ exports.handler =
                           +id
                       ) || {};
 
+
                     return {
 
                       names:
@@ -2384,15 +2895,19 @@ exports.handler =
                       total
 
                     };
+
                   }
                 )
+
                 .sort(
                   (a, b) =>
                     b.total -
                     a.total
                 )
+
           }
         );
+
       }
 
 
@@ -2411,6 +2926,7 @@ exports.handler =
             db
           );
 
+
         return {
 
           statusCode:
@@ -2426,13 +2942,16 @@ exports.handler =
 
             'Content-Disposition':
               'attachment; filename="Reporte_Permisos.xlsx"'
+
           },
 
           body:
             b.toString(
               'base64'
             )
+
         };
+
       }
 
 
@@ -2451,6 +2970,7 @@ exports.handler =
             db
           );
 
+
         return {
 
           statusCode:
@@ -2466,13 +2986,16 @@ exports.handler =
 
             'Content-Disposition':
               'attachment; filename="Reporte_Permisos.pdf"'
+
           },
 
           body:
             b.toString(
               'base64'
             )
+
         };
+
       }
 
 
@@ -2493,6 +3016,7 @@ exports.handler =
 
       console.error(e);
 
+
       return json(
         e.statusCode ||
           500,
@@ -2504,5 +3028,7 @@ exports.handler =
 
         }
       );
+
     }
+
   };
