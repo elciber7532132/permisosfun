@@ -4,3031 +4,2567 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
+const { Pool } = require('pg');
 
 const SECRET =
-  process.env.JWT_SECRET ||
-  'cambia-esta-clave-en-netlify';
+  process.env.JWT_SECRET || 'cambia-esta-clave-en-produccion';
 
 const DB_FILE =
   process.env.DB_FILE ||
   path.join(__dirname, '../../data/empresarial.json');
 
+/*
+|--------------------------------------------------------------------------
+| POSTGRESQL
+|--------------------------------------------------------------------------
+| Render debe tener:
+|
+| DATABASE_URL = Internal Database URL
+|
+| La aplicación utiliza un schema exclusivo:
+|
+| permisosfun
+|
+| para no tocar las tablas de otros sistemas.
+|--------------------------------------------------------------------------
+*/
 
-/* =========================================================
-   BASE DE DATOS
-========================================================= */
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
+
+/*
+|--------------------------------------------------------------------------
+| BASE DE DATOS INICIAL
+|--------------------------------------------------------------------------
+*/
+
+function createEmptyDB() {
+  return {
+    admins: [],
+    workers: [],
+    permissions: [],
+    attendance: [],
+    signatures: [],
+    counters: {
+      workers: 0,
+      permissions: 0,
+      attendance: 0,
+      signatures: 0,
+    },
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
+| CREAR TABLA POSTGRESQL
+|--------------------------------------------------------------------------
+*/
+
+let databaseReady = false;
+
+async function ensurePostgres() {
+  if (databaseReady) return;
+
+  if (!process.env.DATABASE_URL) {
+    throw new Error(
+      'DATABASE_URL no está configurada en las variables de entorno.'
+    );
+  }
+
+  await pool.query(`
+    CREATE SCHEMA IF NOT EXISTS permisosfun
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS permisosfun.app_state (
+      id INTEGER PRIMARY KEY,
+      data JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  databaseReady = true;
+}
+
+/*
+|--------------------------------------------------------------------------
+| CARGAR BASE DE DATOS
+|--------------------------------------------------------------------------
+*/
 
 async function loadDB() {
+  await ensurePostgres();
+
+  const result = await pool.query(`
+    SELECT data
+    FROM permisosfun.app_state
+    WHERE id = 1
+    LIMIT 1
+  `);
+
+  if (result.rows.length > 0) {
+    const db = result.rows[0].data;
+
+    if (!db.admins) db.admins = [];
+    if (!db.workers) db.workers = [];
+    if (!db.permissions) db.permissions = [];
+    if (!db.attendance) db.attendance = [];
+    if (!db.signatures) db.signatures = [];
+
+    if (!db.counters) {
+      db.counters = {
+        workers: 0,
+        permissions: 0,
+        attendance: 0,
+        signatures: 0,
+      };
+    }
+
+    return db;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | SI TODAVÍA NO EXISTE INFORMACIÓN EN POSTGRESQL
+  |--------------------------------------------------------------------------
+  | Se intenta recuperar el JSON local solamente como migración inicial.
+  |--------------------------------------------------------------------------
+  */
 
   let db = null;
 
   try {
+    if (fs.existsSync(DB_FILE)) {
+      const raw = fs.readFileSync(DB_FILE, 'utf8');
 
-    db = JSON.parse(
-      fs.readFileSync(DB_FILE, 'utf8')
-    );
-
-  } catch {}
-
-  if (!db) {
-
-    db = {
-
-      admins: [],
-      workers: [],
-      permissions: [],
-      attendance: [],
-      signatures: [],
-
-      counters: {
-
-        workers: 0,
-        permissions: 0,
-        attendance: 0,
-        signatures: 0
-
+      if (raw.trim()) {
+        db = JSON.parse(raw);
       }
-
-    };
-
-    db.admins.push({
-
-      id: 1,
-
-      username: 'admin',
-
-      password: bcrypt.hashSync(
-        'admin123',
-        10
-      ),
-
-      name: 'Administrador'
-
-    });
-
-    fs.mkdirSync(
-      path.dirname(DB_FILE),
-      {
-        recursive: true
-      }
+    }
+  } catch (error) {
+    console.log(
+      'No se pudo leer el archivo JSON anterior:',
+      error.message
     );
-
-    fs.writeFileSync(
-      DB_FILE,
-      JSON.stringify(
-        db,
-        null,
-        2
-      )
-    );
-
   }
 
+  if (!db) {
+    db = createEmptyDB();
+  }
 
-  /* =======================================================
-     COMPATIBILIDAD CON BASES ANTIGUAS
-  ======================================================= */
+  if (!db.admins) db.admins = [];
+  if (!db.workers) db.workers = [];
+  if (!db.permissions) db.permissions = [];
+  if (!db.attendance) db.attendance = [];
+  if (!db.signatures) db.signatures = [];
 
-  db.admins ||= [];
-  db.workers ||= [];
-  db.permissions ||= [];
-  db.attendance ||= [];
-  db.signatures ||= [];
+  if (!db.counters) {
+    db.counters = {
+      workers: 0,
+      permissions: 0,
+      attendance: 0,
+      signatures: 0,
+    };
+  }
 
-  db.counters ||= {};
+  /*
+  |--------------------------------------------------------------------------
+  | ADMINISTRADOR INICIAL
+  |--------------------------------------------------------------------------
+  */
 
+  if (!Array.isArray(db.admins)) {
+    db.admins = [];
+  }
 
-  db.counters.workers ||=
+  if (db.admins.length === 0) {
+    db.admins.push({
+      id: 1,
+      username: 'admin',
+      password: bcrypt.hashSync('admin123', 10),
+      name: 'Administrador',
+    });
+  }
 
-    db.workers.reduce(
-      (max, x) =>
-        Math.max(
-          max,
-          Number(x.id) || 0
-        ),
-      0
-    );
+  /*
+  |--------------------------------------------------------------------------
+  | GUARDAR ESTADO INICIAL EN POSTGRESQL
+  |--------------------------------------------------------------------------
+  */
 
-
-  db.counters.permissions ||=
-
-    db.permissions.reduce(
-      (max, x) =>
-        Math.max(
-          max,
-          Number(x.id) || 0
-        ),
-      0
-    );
-
-
-  db.counters.attendance ||=
-
-    db.attendance.reduce(
-      (max, x) =>
-        Math.max(
-          max,
-          Number(x.id) || 0
-        ),
-      0
-    );
-
-
-  db.counters.signatures ||=
-
-    db.signatures.reduce(
-      (max, x) =>
-        Math.max(
-          max,
-          Number(x.id) || 0
-        ),
-      0
-    );
-
+  await pool.query(
+    `
+    INSERT INTO permisosfun.app_state
+      (id, data, updated_at)
+    VALUES
+      (1, $1::jsonb, NOW())
+    ON CONFLICT (id)
+    DO NOTHING
+    `,
+    [JSON.stringify(db)]
+  );
 
   return db;
 }
 
+/*
+|--------------------------------------------------------------------------
+| GUARDAR EN POSTGRESQL
+|--------------------------------------------------------------------------
+*/
 
 async function saveDB(db) {
+  await ensurePostgres();
 
-  fs.mkdirSync(
-    path.dirname(DB_FILE),
-    {
-      recursive: true
-    }
+  await pool.query(
+    `
+    INSERT INTO permisosfun.app_state
+      (id, data, updated_at)
+    VALUES
+      (1, $1::jsonb, NOW())
+    ON CONFLICT (id)
+    DO UPDATE SET
+      data = EXCLUDED.data,
+      updated_at = NOW()
+    `,
+    [JSON.stringify(db)]
   );
-
-  fs.writeFileSync(
-    DB_FILE,
-    JSON.stringify(
-      db,
-      null,
-      2
-    )
-  );
-
 }
 
+/*
+|--------------------------------------------------------------------------
+| GENERAR ID
+|--------------------------------------------------------------------------
+*/
 
 function nextId(db, type) {
+  if (!db.counters) {
+    db.counters = {};
+  }
 
-  db.counters[type] =
-    (db.counters[type] || 0) + 1;
+  if (!db.counters[type]) {
+    db.counters[type] = 0;
+  }
+
+  db.counters[type]++;
 
   return db.counters[type];
-
 }
 
+/*
+|--------------------------------------------------------------------------
+| RESPUESTA JSON
+|--------------------------------------------------------------------------
+*/
 
-/* =========================================================
-   RESPUESTA JSON
-========================================================= */
-
-function json(
-  statusCode,
-  body
-) {
-
+function json(statusCode, body) {
   return {
-
     statusCode,
-
     headers: {
-
-      'Content-Type':
-        'application/json',
-
-      'Cache-Control':
-        'no-store',
-
-      'Access-Control-Allow-Origin':
-        '*',
-
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers':
         'Content-Type, Authorization',
-
       'Access-Control-Allow-Methods':
-        'GET, POST, PUT, DELETE, OPTIONS'
-
+        'GET, POST, PUT, DELETE, OPTIONS',
     },
-
-    body:
-      JSON.stringify(body)
-
+    body: JSON.stringify(body),
   };
-
 }
 
-
-/* =========================================================
-   AUTENTICACIÓN
-========================================================= */
+/*
+|--------------------------------------------------------------------------
+| AUTENTICACIÓN
+|--------------------------------------------------------------------------
+*/
 
 function auth(event) {
+  const headers = event.headers || {};
 
-  const h =
-    event.headers?.authorization ||
-    event.headers?.Authorization ||
+  const authorization =
+    headers.authorization ||
+    headers.Authorization ||
     '';
 
-  if (
-    !h.startsWith('Bearer ')
-  ) {
-
-    throw Object.assign(
-      new Error(
-        'No autorizado'
-      ),
-      {
-        statusCode: 401
-      }
-    );
-
+  if (!authorization.startsWith('Bearer ')) {
+    return {
+      error: json(401, {
+        error: 'No autorizado',
+      }),
+    };
   }
 
+  const token = authorization.substring(7);
 
   try {
+    const user = jwt.verify(token, SECRET);
 
-    return jwt.verify(
-      h.slice(7),
-      SECRET
-    );
-
-  } catch {
-
-    throw Object.assign(
-      new Error(
-        'Sesión expirada'
-      ),
-      {
-        statusCode: 401
-      }
-    );
-
+    return {
+      user,
+    };
+  } catch (error) {
+    return {
+      error: json(401, {
+        error: 'Sesión expirada',
+      }),
+    };
   }
-
 }
 
-
-/* =========================================================
-   BODY
-========================================================= */
+/*
+|--------------------------------------------------------------------------
+| BODY
+|--------------------------------------------------------------------------
+*/
 
 function parseBody(event) {
+  if (!event.body) return {};
 
   try {
-
-    if (
-      typeof event.body ===
-      'object'
-    ) {
-
-      return event.body || {};
-
+    if (event.isBase64Encoded) {
+      return JSON.parse(
+        Buffer.from(event.body, 'base64').toString('utf8')
+      );
     }
 
-    return event.body
-      ? JSON.parse(event.body)
-      : {};
+    if (typeof event.body === 'string') {
+      return JSON.parse(event.body);
+    }
 
-  } catch {
-
+    return event.body;
+  } catch (error) {
     return {};
+  }
+}
 
+/*
+|--------------------------------------------------------------------------
+| FECHA
+|--------------------------------------------------------------------------
+*/
+
+function qDate(value) {
+  if (!value) return '';
+
+  const d = new Date(value);
+
+  if (Number.isNaN(d.getTime())) {
+    return String(value).slice(0, 10);
   }
 
+  return d.toISOString().slice(0, 10);
 }
 
-
-function qDate(v) {
-
-  return String(v || '')
-    .slice(0, 10);
-
-}
-
+/*
+|--------------------------------------------------------------------------
+| FECHA/HORA ACTUAL
+|--------------------------------------------------------------------------
+*/
 
 function nowISO() {
-
   return new Date().toISOString();
-
 }
 
-
-/* =========================================================
-   VALIDACIÓN DEL DOCUMENTO
-========================================================= */
+/*
+|--------------------------------------------------------------------------
+| VALIDAR DOCUMENTO
+|--------------------------------------------------------------------------
+*/
 
 function validateDocument(x) {
-
-  const document =
-    String(
-      x.document || ''
-    );
-
-  const documentName =
-    String(
-      x.document_name || ''
-    );
-
-  const documentType =
-    String(
-      x.document_type || ''
-    );
-
-
-  /* -------------------------------------------------------
-     No hay documento
-  ------------------------------------------------------- */
-
-  if (!document) {
-
+  if (!x) {
     return {
-
-      ok: true,
-
       document: '',
       document_name: '',
-      document_type: ''
-
+      document_type: '',
     };
-
   }
 
-
-  /* -------------------------------------------------------
-     Tipos permitidos
-  ------------------------------------------------------- */
-
-  const allowedTypes = [
-
-    'image/jpeg',
-    'image/png',
-    'application/pdf'
-
-  ];
-
-
-  if (
-    !allowedTypes.includes(
-      documentType
-    )
-  ) {
-
-    return {
-
-      ok: false,
-
-      error:
-        'El documento debe ser JPG, JPEG, PNG o PDF.'
-
-    };
-
+  if (typeof x !== 'string') {
+    throw new Error('Documento inválido.');
   }
 
+  const match = x.match(
+    /^data:(image\/jpeg|image\/png|application\/pdf);base64,(.+)$/s
+  );
 
-  /* -------------------------------------------------------
-     Verificar formato Base64
-  ------------------------------------------------------- */
-
-  if (
-    !document.startsWith(
-      'data:'
-    )
-  ) {
-
-    return {
-
-      ok: false,
-
-      error:
-        'El documento enviado no tiene un formato válido.'
-
-    };
-
+  if (!match) {
+    throw new Error(
+      'El documento debe ser JPG, PNG o PDF.'
+    );
   }
 
+  const mime = match[1];
+  const base64 = match[2];
 
-  /* -------------------------------------------------------
-     Verificar que coincida el tipo
-  ------------------------------------------------------- */
+  const buffer = Buffer.from(base64, 'base64');
 
-  if (
-    !document.startsWith(
-      `data:${documentType};base64,`
-    )
-  ) {
-
-    return {
-
-      ok: false,
-
-      error:
-        'El tipo del documento no coincide con el archivo.'
-
-    };
-
+  if (buffer.length > 4 * 1024 * 1024) {
+    throw new Error(
+      'El documento no puede superar los 4 MB.'
+    );
   }
-
-
-  /* -------------------------------------------------------
-     Calcular tamaño aproximado
-  ------------------------------------------------------- */
-
-  const base64Part =
-    document.split(
-      ','
-    )[1] || '';
-
-
-  const padding =
-    (
-      base64Part.match(
-        /=*$/,
-      ) || ['']
-    )[0].length;
-
-
-  const sizeBytes =
-    Math.floor(
-      base64Part.length * 3 / 4
-    ) - padding;
-
-
-  const maxSize =
-    4 * 1024 * 1024;
-
-
-  if (
-    sizeBytes > maxSize
-  ) {
-
-    return {
-
-      ok: false,
-
-      error:
-        'El documento no puede superar los 4 MB.'
-
-    };
-
-  }
-
-
-  /* -------------------------------------------------------
-     Nombre
-  ------------------------------------------------------- */
-
-  if (
-    documentName.length > 255
-  ) {
-
-    return {
-
-      ok: false,
-
-      error:
-        'El nombre del documento es demasiado largo.'
-
-    };
-
-  }
-
 
   return {
-
-    ok: true,
-
-    document,
-    document_name: documentName,
-    document_type: documentType
-
+    document: x,
+    document_name: '',
+    document_type: mime,
   };
-
 }
 
+/*
+|--------------------------------------------------------------------------
+| ENRIQUECER PERMISO
+|--------------------------------------------------------------------------
+*/
 
-/* =========================================================
-   ENRIQUECER PERMISO
-========================================================= */
-
-function enrichPermission(
-  p,
-  db
-) {
-
-  const w =
-    db.workers.find(
-      x =>
-        x.id === p.worker_id
-    ) || {};
-
+function enrichPermission(permission, db) {
+  const worker = db.workers.find(
+    w => Number(w.id) === Number(permission.worker_id)
+  );
 
   return {
+    ...permission,
 
-    ...p,
+    worker: worker || null,
 
-    dni:
-      w.dni || '',
+    worker_name: worker
+      ? worker.names || worker.name || ''
+      : '',
 
-    names:
-      w.names || '',
+    worker_dni: worker
+      ? worker.dni || ''
+      : '',
 
-    position:
-      w.position || '',
+    worker_area: worker
+      ? worker.area || ''
+      : '',
 
-    area:
-      w.area || ''
-
+    worker_position: worker
+      ? worker.position || worker.cargo || ''
+      : '',
   };
-
 }
 
-
-/* =========================================================
-   REPORTE EXCEL
-========================================================= */
+/*
+|--------------------------------------------------------------------------
+| EXCEL
+|--------------------------------------------------------------------------
+*/
 
 async function reportExcel(db) {
+  const workbook = new ExcelJS.Workbook();
 
-  const wb =
-    new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet(
+    'Solicitudes'
+  );
 
-  const ws =
-    wb.addWorksheet(
-      'Permisos'
-    );
-
-
-  ws.columns = [
-
+  sheet.columns = [
     {
-      header: 'Fecha',
-      key: 'date',
-      width: 14
+      header: 'ID',
+      key: 'id',
+      width: 10,
     },
-
-    {
-      header: 'Trabajador',
-      key: 'names',
-      width: 28
-    },
-
     {
       header: 'DNI',
       key: 'dni',
-      width: 14
+      width: 15,
     },
-
+    {
+      header: 'Trabajador',
+      key: 'worker',
+      width: 30,
+    },
     {
       header: 'Área',
       key: 'area',
-      width: 20
+      width: 20,
     },
-
     {
       header: 'Cargo',
       key: 'position',
-      width: 20
+      width: 25,
     },
-
     {
       header: 'Tipo',
       key: 'type',
-      width: 22
+      width: 20,
     },
-
     {
-      header: 'Salida',
+      header: 'Fecha',
+      key: 'date',
+      width: 15,
+    },
+    {
+      header: 'Hora salida',
       key: 'exit_time',
-      width: 12
+      width: 15,
     },
-
     {
-      header: 'Retorno',
+      header: 'Hora retorno',
       key: 'return_time',
-      width: 12
+      width: 15,
     },
-
     {
       header: 'Motivo',
       key: 'reason',
-      width: 35
+      width: 40,
     },
-
+    {
+      header: 'Observación',
+      key: 'observation',
+      width: 40,
+    },
     {
       header: 'Estado',
       key: 'status',
-      width: 15
+      width: 15,
     },
-
     {
-      header: 'Autorizó',
-      key: 'approved_by',
-      width: 22
+      header: 'Fecha solicitud',
+      key: 'created_at',
+      width: 25,
     },
-
-    {
-      header: 'Decisión',
-      key: 'decision_reason',
-      width: 35
-    }
-
   ];
 
-
-  db.permissions
-    .map(
-      p =>
-        enrichPermission(
-          p,
-          db
-        )
-    )
-    .forEach(
-      p =>
-        ws.addRow(p)
+  for (const p of db.permissions) {
+    const worker = db.workers.find(
+      w => Number(w.id) === Number(p.worker_id)
     );
 
+    sheet.addRow({
+      id: p.id,
+      dni: worker?.dni || '',
+      worker:
+        worker?.names ||
+        worker?.name ||
+        '',
+      area: worker?.area || '',
+      position:
+        worker?.position ||
+        worker?.cargo ||
+        '',
+      type: p.type || '',
+      date: p.date || '',
+      exit_time: p.exit_time || '',
+      return_time: p.return_time || '',
+      reason: p.reason || '',
+      observation: p.observation || '',
+      status: p.status || '',
+      created_at: p.created_at || '',
+    });
+  }
 
-  ws.getRow(1).font = {
-    bold: true
-  };
-
-
-  ws.autoFilter =
-    'A1:L1';
-
-
-  const buffer =
-    await wb.xlsx.writeBuffer();
-
-
-  return Buffer.from(
-    buffer
-  );
-
+  return workbook.xlsx.writeBuffer();
 }
 
+/*
+|--------------------------------------------------------------------------
+| PDF
+|--------------------------------------------------------------------------
+*/
 
-/* =========================================================
-   REPORTE PDF
-========================================================= */
-
-async function reportPDF(db) {
-
-  const doc =
-    new PDFDocument({
-      margin: 40
+function reportPDF(db) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      margin: 40,
+      size: 'A4',
     });
 
+    const chunks = [];
 
-  const chunks = [];
+    doc.on('data', chunk => {
+      chunks.push(chunk);
+    });
 
+    doc.on('end', () => {
+      resolve(Buffer.concat(chunks));
+    });
 
-  doc.on(
-    'data',
-    chunk =>
-      chunks.push(chunk)
-  );
+    doc.on('error', reject);
 
-
-  const done =
-    new Promise(
-      resolve =>
-        doc.on(
-          'end',
-          resolve
-        )
-    );
-
-
-  doc
-    .fontSize(18)
-    .text(
-      'Reporte de permisos y salidas - Funeraria Martínez'
-    );
-
-
-  doc
-    .moveDown()
-    .fontSize(9)
-    .text(
-      'Generado: ' +
-      new Date().toLocaleString(
-        'es-PE'
-      )
-    );
-
-
-  doc.moveDown();
-
-
-  db.permissions
-    .map(
-      p =>
-        enrichPermission(
-          p,
-          db
-        )
-    )
-    .forEach(
-      (p, i) => {
-
-        doc
-          .fontSize(10)
-          .text(
-            `${i + 1}. ${p.date} | ${p.names} (${p.dni})`
-          );
-
-
-        doc
-          .fontSize(9)
-          .text(
-            `Área: ${p.area || '-'} | Cargo: ${
-              p.position || '-'
-            }`
-          );
-
-
-        doc.text(
-          `Tipo: ${p.type} | Horario: ${
-            p.exit_time || '-'
-          } - ${
-            p.return_time || '-'
-          }`
-        );
-
-
-        doc.text(
-          `Estado: ${p.status}`
-        );
-
-
-        doc.text(
-          `Motivo: ${
-            p.reason || '-'
-          }`
-        );
-
-
-        doc.text(
-          `Autorizó: ${
-            p.approved_by || '-'
-          }`
-        );
-
-
-        if (
-          p.decision_reason
-        ) {
-
-          doc.text(
-            `Decisión: ${
-              p.decision_reason
-            }`
-          );
-
-        }
-
-
-        doc.moveDown(
-          0.7
-        );
-
-      }
-    );
-
-
-  doc.end();
-
-
-  await done;
-
-
-  return Buffer.concat(
-    chunks
-  );
-
-}
-
-
-/* =========================================================
-   HANDLER PRINCIPAL
-========================================================= */
-
-exports.handler =
-  async event => {
-
-    const method =
-      event.httpMethod;
-
-
-    const path =
-      event.path
-        .replace(
-          /^\/\.netlify\/functions\/api/,
-          ''
-        )
-        .replace(
-          /^\/api/,
-          ''
-        ) || '/';
-
-
-    try {
-
-      const db =
-        await loadDB();
-
-
-      /* ===================================================
-         OPTIONS / CORS
-      =================================================== */
-
-      if (
-        method === 'OPTIONS'
-      ) {
-
-        return json(
-          200,
-          {
-            ok: true
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         LOGIN
-      =================================================== */
-
-      if (
-        method === 'POST' &&
-        path === '/login'
-      ) {
-
-        const {
-          username,
-          password
-        } =
-          parseBody(event);
-
-
-        const a =
-          db.admins.find(
-            x =>
-              x.username ===
-              username
-          );
-
-
-        if (
-          !a ||
-          !bcrypt.compareSync(
-            password || '',
-            a.password
-          )
-        ) {
-
-          return json(
-            401,
-            {
-              error:
-                'Usuario o contraseña incorrectos'
-            }
-          );
-
-        }
-
-
-        const token =
-          jwt.sign(
-            {
-              id:
-                a.id,
-
-              username:
-                a.username,
-
-              name:
-                a.name
-
-            },
-
-            SECRET,
-
-            {
-              expiresIn:
-                '8h'
-            }
-          );
-
-
-        return json(
-          200,
-          {
-
-            token,
-
-            user: {
-
-              username:
-                a.username,
-
-              name:
-                a.name
-
-            }
-
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         FORMULARIO PÚBLICO
-         BUSCAR TRABAJADOR POR DNI
-      =================================================== */
-
-      if (
-        method === 'GET' &&
-        path ===
-          '/public/worker'
-      ) {
-
-        const dni =
-          String(
-            event
-              .queryStringParameters
-              ?.dni || ''
-          ).trim();
-
-
-        if (!dni) {
-
-          return json(
-            400,
-            {
-              error:
-                'Debes enviar el DNI'
-            }
-          );
-
-        }
-
-
-        const worker =
-          db.workers.find(
-            w =>
-              String(
-                w.dni || ''
-              ).trim() === dni &&
-              w.status !==
-                'Inactivo'
-          );
-
-
-        if (!worker) {
-
-          return json(
-            404,
-            {
-              found: false,
-
-              error:
-                'No se encontró un trabajador activo con ese DNI'
-            }
-          );
-
-        }
-
-
-        return json(
-          200,
-          {
-
-            ok: true,
-
-            found: true,
-
-            worker: {
-
-              id:
-                worker.id,
-
-              dni:
-                worker.dni,
-
-              names:
-                worker.names,
-
-              position:
-                worker.position || '',
-
-              area:
-                worker.area || '',
-
-              phone:
-                worker.phone || '',
-
-              email:
-                worker.email || ''
-
-            }
-
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         FORMULARIO PÚBLICO
-         CREAR SOLICITUD
-      =================================================== */
-
-      if (
-        method === 'POST' &&
-        path ===
-          '/public/permissions'
-      ) {
-
-        const x =
-          parseBody(event);
-
-
-        const dni =
-          String(
-            x.dni || ''
-          ).trim();
-
-
-        if (!dni) {
-
-          return json(
-            400,
-            {
-              error:
-                'El DNI es obligatorio'
-            }
-          );
-
-        }
-
-
-        if (!x.type) {
-
-          return json(
-            400,
-            {
-              error:
-                'El tipo de permiso es obligatorio'
-            }
-          );
-
-        }
-
-
-        if (!x.date) {
-
-          return json(
-            400,
-            {
-              error:
-                'La fecha es obligatoria'
-            }
-          );
-
-        }
-
-
-        const worker =
-          db.workers.find(
-            w =>
-              String(
-                w.dni || ''
-              ).trim() === dni &&
-              w.status !==
-                'Inactivo'
-          );
-
-
-        if (!worker) {
-
-          return json(
-            404,
-            {
-              error:
-                'No se encontró un trabajador activo con ese DNI'
-            }
-          );
-
-        }
-
-
-        /* =================================================
-           VALIDAR DOCUMENTO
-        ================================================= */
-
-        const documentResult =
-          validateDocument(x);
-
-
-        if (
-          !documentResult.ok
-        ) {
-
-          return json(
-            400,
-            {
-              error:
-                documentResult.error
-            }
-          );
-
-        }
-
-
-        /* =================================================
-           CREAR SOLICITUD
-        ================================================= */
-
-        const p = {
-
-          id:
-            nextId(
-              db,
-              'permissions'
-            ),
-
-          worker_id:
-            worker.id,
-
-          type:
-            x.type,
-
-          date:
-            x.date,
-
-          exit_time:
-            x.exit_time || '',
-
-          return_time:
-            x.return_time || '',
-
-          reason:
-            x.reason || '',
-
-          observation:
-            x.observation || '',
-
-
-          /* -----------------------------------------------
-             DOCUMENTO SUSTENTATORIO
-          ------------------------------------------------ */
-
-          document:
-            documentResult.document,
-
-          document_name:
-            documentResult.document_name,
-
-          document_type:
-            documentResult.document_type,
-
-
-          status:
-            'Pendiente',
-
-          approved_by:
-            '',
-
-          approved_at:
-            '',
-
-          decision_reason:
-            '',
-
-          created_at:
-            nowISO()
-
-        };
-
-
-        db.permissions.push(
-          p
-        );
-
-
-        await saveDB(
-          db
-        );
-
-
-        return json(
-          200,
-          {
-
-            ok: true,
-
-            message:
-              'Solicitud enviada correctamente',
-
-            permission: {
-
-              id:
-                p.id,
-
-              worker_id:
-                p.worker_id,
-
-              dni:
-                worker.dni,
-
-              names:
-                worker.names,
-
-              area:
-                worker.area || '',
-
-              type:
-                p.type,
-
-              date:
-                p.date,
-
-              status:
-                p.status,
-
-              document:
-                Boolean(
-                  p.document
-                ),
-
-              document_name:
-                p.document_name || ''
-
-            }
-
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         TODO LO SIGUIENTE REQUIERE LOGIN
-      =================================================== */
-
-      const user =
-        auth(event);
-
-
-      /* ===================================================
-         ME
-      =================================================== */
-
-      if (
-        method === 'GET' &&
-        path === '/me'
-      ) {
-
-        return json(
-          200,
-          user
-        );
-
-      }
-
-
-      /* ===================================================
-         TRABAJADORES - LISTAR
-      =================================================== */
-
-      if (
-        method === 'GET' &&
-        path === '/workers'
-      ) {
-
-        const search =
-          String(
-            event
-              .queryStringParameters
-              ?.search || ''
-          )
-            .trim()
-            .toLowerCase();
-
-
-        let rows =
-          db.workers.filter(
-            w => {
-
-              if (!search) {
-                return true;
-              }
-
-
-              return [
-
-                w.dni,
-                w.names,
-                w.position,
-                w.area,
-                w.phone,
-                w.email
-
-              ].some(
-                value =>
-                  String(
-                    value || ''
-                  )
-                    .toLowerCase()
-                    .includes(
-                      search
-                    )
-              );
-
-            }
-          );
-
-
-        rows.sort(
-          (a, b) =>
-            String(
-              a.names || ''
-            ).localeCompare(
-              String(
-                b.names || ''
-              )
-            )
-        );
-
-
-        return json(
-          200,
-          rows
-        );
-
-      }
-
-
-      /* ===================================================
-         TRABAJADORES - CREAR
-      =================================================== */
-
-      if (
-        method === 'POST' &&
-        path === '/workers'
-      ) {
-
-        const x =
-          parseBody(event);
-
-
-        if (
-          !x.dni ||
-          !x.names
-        ) {
-
-          return json(
-            400,
-            {
-              error:
-                'DNI y nombres son obligatorios'
-            }
-          );
-
-        }
-
-
-        const dni =
-          String(
-            x.dni
-          ).trim();
-
-
-        if (
-          db.workers.some(
-            w =>
-              String(
-                w.dni || ''
-              ).trim() === dni
-          )
-        ) {
-
-          return json(
-            400,
-            {
-              error:
-                'El DNI ya está registrado'
-            }
-          );
-
-        }
-
-
-        const w = {
-
-          id:
-            nextId(
-              db,
-              'workers'
-            ),
-
-          dni,
-
-          names:
-            String(
-              x.names || ''
-            ).trim(),
-
-          position:
-            x.position || '',
-
-          area:
-            x.area || '',
-
-          phone:
-            x.phone || '',
-
-          email:
-            x.email || '',
-
-          hire_date:
-            x.hire_date || '',
-
-          status:
-            x.status ||
-            'Activo',
-
-          photo:
-            x.photo || '',
-
-          created_at:
-            nowISO()
-
-        };
-
-
-        db.workers.push(
-          w
-        );
-
-
-        await saveDB(
-          db
-        );
-
-
-        return json(
-          200,
-          {
-            ok: true,
-            worker: w
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         TRABAJADORES / ID
-      =================================================== */
-
-      const workerMatch =
-        path.match(
-          /^\/workers\/(\d+)(?:\/history)?$/
-        );
-
-
-      /* ===================================================
-         EDITAR TRABAJADOR
-      =================================================== */
-
-      if (
-        workerMatch &&
-        method === 'PUT' &&
-        !path.endsWith(
-          '/history'
-        )
-      ) {
-
-        const id =
-          +workerMatch[1];
-
-
-        const index =
-          db.workers.findIndex(
-            w =>
-              w.id === id
-          );
-
-
-        if (index < 0) {
-
-          return json(
-            404,
-            {
-              error:
-                'Trabajador no encontrado'
-            }
-          );
-
-        }
-
-
-        const x =
-          parseBody(event);
-
-
-        const newDni =
-          String(
-            x.dni ||
-            db.workers[index].dni ||
-            ''
-          ).trim();
-
-
-        const duplicate =
-          db.workers.some(
-            w =>
-              w.id !== id &&
-              String(
-                w.dni || ''
-              ).trim() === newDni
-          );
-
-
-        if (duplicate) {
-
-          return json(
-            400,
-            {
-              error:
-                'El DNI ya está registrado en otro trabajador'
-            }
-          );
-
-        }
-
-
-        db.workers[index] = {
-
-          ...db.workers[index],
-
-          ...x,
-
-          id,
-
-          dni:
-            newDni
-
-        };
-
-
-        await saveDB(
-          db
-        );
-
-
-        return json(
-          200,
-          {
-
-            ok: true,
-
-            worker:
-              db.workers[index]
-
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         TRABAJADORES - ELIMINACIÓN FÍSICA
-
-         IMPORTANTE:
-
-         Se elimina físicamente SOLO el trabajador
-         seleccionado.
-
-         También se eliminan sus permisos,
-         asistencias y firmas relacionadas.
-      =================================================== */
-
-      if (
-        workerMatch &&
-        method === 'DELETE' &&
-        !path.endsWith(
-          '/history'
-        )
-      ) {
-
-        const id =
-          +workerMatch[1];
-
-
-        /* -----------------------------------------------
-           BUSCAR TRABAJADOR
-        ------------------------------------------------ */
-
-        const workerIndex =
-          db.workers.findIndex(
-            w =>
-              w.id === id
-          );
-
-
-        if (
-          workerIndex < 0
-        ) {
-
-          return json(
-            404,
-            {
-              error:
-                'Trabajador no encontrado'
-            }
-          );
-
-        }
-
-
-        /* -----------------------------------------------
-           GUARDAR TRABAJADOR ELIMINADO
-        ------------------------------------------------ */
-
-        const deletedWorker =
-          db.workers[
-            workerIndex
-          ];
-
-
-        /* -----------------------------------------------
-           OBTENER PERMISOS
-        ------------------------------------------------ */
-
-        const permissionIds =
-          db.permissions
-            .filter(
-              p =>
-                p.worker_id === id
-            )
-            .map(
-              p =>
-                p.id
-            );
-
-
-        /* -----------------------------------------------
-           ELIMINAR TRABAJADOR FÍSICAMENTE
-        ------------------------------------------------ */
-
-        db.workers.splice(
-          workerIndex,
-          1
-        );
-
-
-        /* -----------------------------------------------
-           ELIMINAR PERMISOS DEL TRABAJADOR
-        ------------------------------------------------ */
-
-        db.permissions =
-          db.permissions.filter(
-            p =>
-              p.worker_id !== id
-          );
-
-
-        /* -----------------------------------------------
-           ELIMINAR ASISTENCIAS
-        ------------------------------------------------ */
-
-        db.attendance =
-          db.attendance.filter(
-            a =>
-              a.worker_id !== id
-          );
-
-
-        /* -----------------------------------------------
-           ELIMINAR FIRMAS RELACIONADAS
-        ------------------------------------------------ */
-
-        db.signatures =
-          db.signatures.filter(
-            s =>
-              !permissionIds.includes(
-                s.permission_id
-              )
-          );
-
-
-        /* -----------------------------------------------
-           GUARDAR
-        ------------------------------------------------ */
-
-        await saveDB(
-          db
-        );
-
-
-        return json(
-          200,
-          {
-
-            ok: true,
-
-            message:
-              'Trabajador eliminado definitivamente',
-
-            worker:
-              deletedWorker
-
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         HISTORIAL DEL TRABAJADOR
-      =================================================== */
-
-      if (
-        workerMatch &&
-        method === 'GET' &&
-        path.endsWith(
-          '/history'
-        )
-      ) {
-
-        const worker =
-          db.workers.find(
-            w =>
-              w.id ===
-              +workerMatch[1]
-          );
-
-
-        if (!worker) {
-
-          return json(
-            404,
-            {
-              error:
-                'Trabajador no encontrado'
-            }
-          );
-
-        }
-
-
-        return json(
-          200,
-          {
-
-            worker,
-
-            permissions:
-              db.permissions
-
-                .filter(
-                  p =>
-                    p.worker_id ===
-                    worker.id
-                )
-
-                .sort(
-                  (a, b) =>
-                    String(
-                      b.date || ''
-                    ).localeCompare(
-                      String(
-                        a.date || ''
-                      )
-                    )
-                ),
-
-            attendance:
-              db.attendance
-
-                .filter(
-                  a =>
-                    a.worker_id ===
-                    worker.id
-                )
-
-                .sort(
-                  (a, b) =>
-                    String(
-                      b.date || ''
-                    ).localeCompare(
-                      String(
-                        a.date || ''
-                      )
-                    )
-                )
-
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         PERMISOS - LISTAR
-      =================================================== */
-
-      if (
-        method === 'GET' &&
-        path === '/permissions'
-      ) {
-
-        const qp =
-          event
-            .queryStringParameters ||
-          {};
-
-
-        let rows =
-          db.permissions.map(
-            p =>
-              enrichPermission(
-                p,
-                db
-              )
-          );
-
-
-        if (qp.search) {
-
-          const s =
-            String(
-              qp.search
-            ).toLowerCase();
-
-
-          rows =
-            rows.filter(
-              p =>
-
-                String(
-                  p.dni || ''
-                )
-                  .toLowerCase()
-                  .includes(s) ||
-
-                String(
-                  p.names || ''
-                )
-                  .toLowerCase()
-                  .includes(s) ||
-
-                String(
-                  p.type || ''
-                )
-                  .toLowerCase()
-                  .includes(s)
-            );
-
-        }
-
-
-        if (qp.status) {
-
-          rows =
-            rows.filter(
-              p =>
-                p.status ===
-                qp.status
-            );
-
-        }
-
-
-        if (qp.type) {
-
-          rows =
-            rows.filter(
-              p =>
-                p.type ===
-                qp.type
-            );
-
-        }
-
-
-        if (qp.from) {
-
-          rows =
-            rows.filter(
-              p =>
-                p.date >=
-                qp.from
-            );
-
-        }
-
-
-        if (qp.to) {
-
-          rows =
-            rows.filter(
-              p =>
-                p.date <=
-                qp.to
-            );
-
-        }
-
-
-        rows.sort(
-          (a, b) => {
-
-            const dateCompare =
-              String(
-                b.date || ''
-              ).localeCompare(
-                String(
-                  a.date || ''
-                )
-              );
-
-
-            if (
-              dateCompare !== 0
-            ) {
-
-              return dateCompare;
-
-            }
-
-
-            return (
-              Number(b.id) -
-              Number(a.id)
-            );
-
-          }
-        );
-
-
-        return json(
-          200,
-          rows
-        );
-
-      }
-
-
-      /* ===================================================
-         PERMISOS - CREAR DESDE DASHBOARD
-      =================================================== */
-
-      if (
-        method === 'POST' &&
-        path === '/permissions'
-      ) {
-
-        const x =
-          parseBody(event);
-
-
-        if (
-          !x.worker_id ||
-          !x.type ||
-          !x.date
-        ) {
-
-          return json(
-            400,
-            {
-              error:
-                'Trabajador, tipo y fecha son obligatorios'
-            }
-          );
-
-        }
-
-
-        const worker =
-          db.workers.find(
-            w =>
-              w.id ===
-              +x.worker_id
-          );
-
-
-        if (!worker) {
-
-          return json(
-            404,
-            {
-              error:
-                'Trabajador no encontrado'
-            }
-          );
-
-        }
-
-
-        /* =================================================
-           VALIDAR DOCUMENTO
-        ================================================= */
-
-        const documentResult =
-          validateDocument(x);
-
-
-        if (
-          !documentResult.ok
-        ) {
-
-          return json(
-            400,
-            {
-              error:
-                documentResult.error
-            }
-          );
-
-        }
-
-
-        const p = {
-
-          id:
-            nextId(
-              db,
-              'permissions'
-            ),
-
-          worker_id:
-            +x.worker_id,
-
-          type:
-            x.type,
-
-          date:
-            x.date,
-
-          exit_time:
-            x.exit_time || '',
-
-          return_time:
-            x.return_time || '',
-
-          reason:
-            x.reason || '',
-
-          observation:
-            x.observation || '',
-
-          document:
-            documentResult.document,
-
-          document_name:
-            documentResult.document_name,
-
-          document_type:
-            documentResult.document_type,
-
-          status:
-            'Pendiente',
-
-          approved_by:
-            '',
-
-          approved_at:
-            '',
-
-          decision_reason:
-            '',
-
-          created_at:
-            nowISO()
-
-        };
-
-
-        db.permissions.push(
-          p
-        );
-
-
-        await saveDB(
-          db
-        );
-
-
-        return json(
-          200,
-          {
-
-            ok: true,
-
-            permission:
-              enrichPermission(
-                p,
-                db
-              )
-
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         PERMISOS - ELIMINAR FÍSICAMENTE
-
-         DELETE:
-         /permissions/:id
-      =================================================== */
-
-      const deletePermissionMatch =
-        path.match(
-          /^\/permissions\/(\d+)$/
-        );
-
-
-      if (
-        deletePermissionMatch &&
-        method === 'DELETE'
-      ) {
-
-        const id =
-          +deletePermissionMatch[1];
-
-
-        const index =
-          db.permissions.findIndex(
-            p =>
-              p.id === id
-          );
-
-
-        if (index < 0) {
-
-          return json(
-            404,
-            {
-              error:
-                'Permiso no encontrado'
-            }
-          );
-
-        }
-
-
-        const deleted =
-          db.permissions[index];
-
-
-        /* -----------------------------------------------
-           ELIMINAR PERMISO
-        ------------------------------------------------ */
-
-        db.permissions.splice(
-          index,
-          1
-        );
-
-
-        /* -----------------------------------------------
-           ELIMINAR FIRMAS
-        ------------------------------------------------ */
-
-        db.signatures =
-          db.signatures.filter(
-            s =>
-              s.permission_id !== id
-          );
-
-
-        /* -----------------------------------------------
-           GUARDAR
-        ------------------------------------------------ */
-
-        await saveDB(
-          db
-        );
-
-
-        return json(
-          200,
-          {
-
-            ok: true,
-
-            message:
-              'Permiso eliminado correctamente',
-
-            permission:
-              deleted
-
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         PERMISOS - CAMBIAR ESTADO
-      =================================================== */
-
-      const permissionStatusMatch =
-        path.match(
-          /^\/permissions\/(\d+)\/status$/
-        );
-
-
-      if (
-        permissionStatusMatch &&
-        method === 'PUT'
-      ) {
-
-        const p =
-          db.permissions.find(
-            x =>
-              x.id ===
-              +permissionStatusMatch[1]
-          );
-
-
-        if (!p) {
-
-          return json(
-            404,
-            {
-              error:
-                'Permiso no encontrado'
-            }
-          );
-
-        }
-
-
-        const {
-          status,
-          reason = ''
-        } =
-          parseBody(event);
-
-
-        if (
-          ![
-            'Aprobado',
-            'Rechazado',
-            'Pendiente'
-          ].includes(
-            status
-          )
-        ) {
-
-          return json(
-            400,
-            {
-              error:
-                'Estado inválido'
-            }
-          );
-
-        }
-
-
-        if (
-          status ===
-            'Rechazado' &&
-          !String(
-            reason
-          ).trim()
-        ) {
-
-          return json(
-            400,
-            {
-              error:
-                'Debes indicar el motivo del rechazo'
-            }
-          );
-
-        }
-
-
-        p.status =
-          status;
-
-
-        p.approved_by =
-          status ===
-          'Pendiente'
-            ? ''
-            : user.name;
-
-
-        p.approved_at =
-          status ===
-          'Pendiente'
-            ? ''
-            : nowISO();
-
-
-        p.decision_reason =
-          String(
-            reason || ''
-          );
-
-
-        db.signatures.push({
-
-          id:
-            nextId(
-              db,
-              'signatures'
-            ),
-
-          permission_id:
-            p.id,
-
-          signer:
-            user.name,
-
-          action:
-            status,
-
-          signed_at:
-            nowISO()
-
-        });
-
-
-        await saveDB(
-          db
-        );
-
-
-        return json(
-          200,
-          {
-            ok: true
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         ASISTENCIA - LISTAR
-      =================================================== */
-
-      if (
-        method === 'GET' &&
-        path === '/attendance'
-      ) {
-
-        const qp =
-          event
-            .queryStringParameters ||
-          {};
-
-
-        let rows =
-          db.attendance.map(
-            a => {
-
-              const w =
-                db.workers.find(
-                  x =>
-                    x.id ===
-                    a.worker_id
-                ) || {};
-
-
-              return {
-
-                ...a,
-
-                names:
-                  w.names || '',
-
-                dni:
-                  w.dni || '',
-
-                area:
-                  w.area || '',
-
-                position:
-                  w.position || ''
-
-              };
-
-            }
-          );
-
-
-        if (qp.date) {
-
-          rows =
-            rows.filter(
-              a =>
-                a.date ===
-                qp.date
-            );
-
-        }
-
-
-        if (qp.worker_id) {
-
-          rows =
-            rows.filter(
-              a =>
-                a.worker_id ===
-                +qp.worker_id
-            );
-
-        }
-
-
-        rows.sort(
-          (a, b) =>
-            String(
-              b.date || ''
-            ).localeCompare(
-              String(
-                a.date || ''
-              )
-            ) ||
-
-            String(
-              a.names || ''
-            ).localeCompare(
-              String(
-                b.names || ''
-              )
-            )
-        );
-
-
-        return json(
-          200,
-          rows
-        );
-
-      }
-
-
-      /* ===================================================
-         ASISTENCIA - GUARDAR
-      =================================================== */
-
-      if (
-        method === 'POST' &&
-        path === '/attendance'
-      ) {
-
-        const x =
-          parseBody(event);
-
-
-        if (
-          !x.worker_id ||
-          !x.date
-        ) {
-
-          return json(
-            400,
-            {
-              error:
-                'Trabajador y fecha son obligatorios'
-            }
-          );
-
-        }
-
-
-        let a =
-          db.attendance.find(
-            v =>
-              v.worker_id ===
-                +x.worker_id &&
-              v.date ===
-                x.date
-          );
-
-
-        if (!a) {
-
-          a = {
-
-            id:
-              nextId(
-                db,
-                'attendance'
-              ),
-
-            worker_id:
-              +x.worker_id,
-
-            date:
-              x.date
-
-          };
-
-
-          db.attendance.push(
-            a
-          );
-
-        }
-
-
-        Object.assign(
-          a,
-          {
-
-            entry_time:
-              x.entry_time || '',
-
-            exit_time:
-              x.exit_time || '',
-
-            status:
-              x.status ||
-              'Presente',
-
-            late_minutes:
-              Number(
-                x.late_minutes
-              ) || 0,
-
-            justification:
-              x.justification || '',
-
-            observation:
-              x.observation || ''
-
-          }
-        );
-
-
-        await saveDB(
-          db
-        );
-
-
-        return json(
-          200,
-          {
-            ok: true,
-            attendance: a
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         NOTIFICACIONES
-      =================================================== */
-
-      if (
-        method === 'GET' &&
-        path ===
-          '/notifications'
-      ) {
-
-        const latest =
-          db.permissions
-
-            .filter(
-              p =>
-                p.status ===
-                'Pendiente'
-            )
-
-            .sort(
-              (a, b) =>
-                String(
-                  b.created_at || ''
-                ).localeCompare(
-                  String(
-                    a.created_at || ''
-                  )
-                )
-            )
-
-            .slice(
-              0,
-              8
-            )
-
-            .map(
-              p => {
-
-                const x =
-                  enrichPermission(
-                    p,
-                    db
-                  );
-
-
-                return {
-
-                  id:
-                    p.id,
-
-                  date:
-                    p.date,
-
-                  type:
-                    p.type,
-
-                  created_at:
-                    p.created_at,
-
-                  names:
-                    x.names,
-
-                  dni:
-                    x.dni
-
-                };
-
-              }
-            );
-
-
-        return json(
-          200,
-          {
-
-            pending:
-              db.permissions.filter(
-                p =>
-                  p.status ===
-                  'Pendiente'
-              ).length,
-
-            latest
-
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         DASHBOARD
-      =================================================== */
-
-      if (
-        method === 'GET' &&
-        path === '/dashboard'
-      ) {
-
-        const now =
-          new Date();
-
-
-        const iso =
-          now
-            .toISOString()
-            .slice(
-              0,
-              10
-            );
-
-
-        const month =
-          iso.slice(
-            0,
-            7
-          );
-
-
-        const weekStart =
-          new Date(now);
-
-
-        weekStart.setDate(
-          now.getDate() - 6
-        );
-
-
-        const ws =
-          weekStart
-            .toISOString()
-            .slice(
-              0,
-              10
-            );
-
-
-        const active =
-          db.workers.filter(
-            w =>
-              w.status !==
-              'Inactivo'
-          ).length;
-
-
-        const inactive =
-          db.workers.filter(
-            w =>
-              w.status ===
-              'Inactivo'
-          ).length;
-
-
-        const permissions =
-          db.permissions;
-
-
-        const byType =
-          {};
-
-
-        permissions.forEach(
-          p => {
-
-            byType[p.type] =
-              (
-                byType[p.type] ||
-                0
-              ) + 1;
-
-          }
-        );
-
-
-        const ranking =
-          {};
-
-
-        permissions.forEach(
-          p => {
-
-            const w =
-              db.workers.find(
-                x =>
-                  x.id ===
-                  p.worker_id
-              );
-
-
-            if (w) {
-
-              ranking[w.id] =
-                (
-                  ranking[w.id] ||
-                  0
-                ) + 1;
-
-            }
-
-          }
-        );
-
-
-        return json(
-          200,
-          {
-
-            totalWorkers:
-              active,
-
-            inactive,
-
-            permissions:
-              permissions.length,
-
-            pending:
-              permissions.filter(
-                p =>
-                  p.status ===
-                  'Pendiente'
-              ).length,
-
-            late:
-              db.attendance.filter(
-                a =>
-                  a.date >= ws &&
-                  Number(
-                    a.late_minutes
-                  ) > 0
-              ).length,
-
-            today:
-              permissions.filter(
-                p =>
-                  p.date ===
-                  iso
-              ).length,
-
-            weekly:
-              permissions.filter(
-                p =>
-                  p.date >= ws
-              ).length,
-
-            monthly:
-              permissions.filter(
-                p =>
-                  String(
-                    p.date || ''
-                  ).startsWith(
-                    month
-                  )
-              ).length,
-
-            approved:
-              permissions.filter(
-                p =>
-                  p.status ===
-                  'Aprobado'
-              ).length,
-
-            byType:
-              Object.entries(
-                byType
-              ).map(
-                ([type, total]) => ({
-                  type,
-                  total
-                })
-              ),
-
-            ranking:
-              Object.entries(
-                ranking
-              )
-                .map(
-                  ([id, total]) => {
-
-                    const w =
-                      db.workers.find(
-                        x =>
-                          x.id ===
-                          +id
-                      ) || {};
-
-
-                    return {
-
-                      names:
-                        w.names || '',
-
-                      area:
-                        w.area || '',
-
-                      total
-
-                    };
-
-                  }
-                )
-
-                .sort(
-                  (a, b) =>
-                    b.total -
-                    a.total
-                )
-
-          }
-        );
-
-      }
-
-
-      /* ===================================================
-         REPORTE EXCEL
-      =================================================== */
-
-      if (
-        method === 'GET' &&
-        path ===
-          '/reports/excel'
-      ) {
-
-        const b =
-          await reportExcel(
-            db
-          );
-
-
-        return {
-
-          statusCode:
-            200,
-
-          isBase64Encoded:
-            true,
-
-          headers: {
-
-            'Content-Type':
-              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-
-            'Content-Disposition':
-              'attachment; filename="Reporte_Permisos.xlsx"'
-
-          },
-
-          body:
-            b.toString(
-              'base64'
-            )
-
-        };
-
-      }
-
-
-      /* ===================================================
-         REPORTE PDF
-      =================================================== */
-
-      if (
-        method === 'GET' &&
-        path ===
-          '/reports/pdf'
-      ) {
-
-        const b =
-          await reportPDF(
-            db
-          );
-
-
-        return {
-
-          statusCode:
-            200,
-
-          isBase64Encoded:
-            true,
-
-          headers: {
-
-            'Content-Type':
-              'application/pdf',
-
-            'Content-Disposition':
-              'attachment; filename="Reporte_Permisos.pdf"'
-
-          },
-
-          body:
-            b.toString(
-              'base64'
-            )
-
-        };
-
-      }
-
-
-      /* ===================================================
-         RUTA NO ENCONTRADA
-      =================================================== */
-
-      return json(
-        404,
+    doc
+      .fontSize(18)
+      .text(
+        'Reporte de Solicitudes de Permiso',
         {
-          error:
-            'Ruta no encontrada'
+          align: 'center',
         }
       );
 
+    doc.moveDown();
 
-    } catch (e) {
-
-      console.error(e);
-
-
-      return json(
-        e.statusCode ||
-          500,
-        {
-
-          error:
-            e.message ||
-            'Error interno'
-
-        }
+    for (const p of db.permissions) {
+      const worker = db.workers.find(
+        w =>
+          Number(w.id) ===
+          Number(p.worker_id)
       );
 
+      doc
+        .fontSize(10)
+        .text(
+          `Solicitud #${p.id}`
+        );
+
+      doc.text(
+        `Trabajador: ${
+          worker?.names ||
+          worker?.name ||
+          ''
+        }`
+      );
+
+      doc.text(
+        `DNI: ${
+          worker?.dni || ''
+        }`
+      );
+
+      doc.text(
+        `Área: ${
+          worker?.area || ''
+        }`
+      );
+
+      doc.text(
+        `Cargo: ${
+          worker?.position ||
+          worker?.cargo ||
+          ''
+        }`
+      );
+
+      doc.text(
+        `Tipo: ${p.type || ''}`
+      );
+
+      doc.text(
+        `Fecha: ${p.date || ''}`
+      );
+
+      doc.text(
+        `Salida: ${
+          p.exit_time || ''
+        }`
+      );
+
+      doc.text(
+        `Retorno: ${
+          p.return_time || ''
+        }`
+      );
+
+      doc.text(
+        `Motivo: ${
+          p.reason || ''
+        }`
+      );
+
+      doc.text(
+        `Estado: ${
+          p.status || ''
+        }`
+      );
+
+      doc.moveDown();
+
+      doc
+        .moveTo(40, doc.y)
+        .lineTo(555, doc.y)
+        .stroke();
+
+      doc.moveDown();
     }
 
-  };
+    doc.end();
+  });
+}
+
+/*
+|--------------------------------------------------------------------------
+| HANDLER
+|--------------------------------------------------------------------------
+*/
+
+async function handler(event) {
+  try {
+    let requestPath =
+      event.path ||
+      event.rawPath ||
+      '/';
+
+    /*
+     * Normalizar rutas Netlify /api
+     */
+
+    requestPath = requestPath
+      .replace(
+        '/.netlify/functions/api',
+        ''
+      )
+      .replace(/^\/api/, '');
+
+    if (!requestPath) {
+      requestPath = '/';
+    }
+
+    if (!requestPath.startsWith('/')) {
+      requestPath =
+        '/' + requestPath;
+    }
+
+    const method =
+      event.httpMethod ||
+      event.requestContext?.http?.method ||
+      'GET';
+
+    /*
+    |--------------------------------------------------------------------------
+    | CORS OPTIONS
+    |--------------------------------------------------------------------------
+    */
+
+    if (method === 'OPTIONS') {
+      return json(200, {
+        ok: true,
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CARGAR POSTGRESQL
+    |--------------------------------------------------------------------------
+    */
+
+    const db = await loadDB();
+
+    /*
+    |--------------------------------------------------------------------------
+    | LOGIN
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'POST' &&
+      requestPath === '/login'
+    ) {
+      const body = parseBody(event);
+
+      const username =
+        String(
+          body.username || ''
+        ).trim();
+
+      const password =
+        String(
+          body.password || ''
+        );
+
+      const admin =
+        db.admins.find(
+          a =>
+            String(
+              a.username
+            ).toLowerCase() ===
+            username.toLowerCase()
+        );
+
+      if (!admin) {
+        return json(401, {
+          error:
+            'Usuario o contraseña incorrectos.',
+        });
+      }
+
+      const valid =
+        await bcrypt.compare(
+          password,
+          admin.password
+        );
+
+      if (!valid) {
+        return json(401, {
+          error:
+            'Usuario o contraseña incorrectos.',
+        });
+      }
+
+      const token =
+        jwt.sign(
+          {
+            id: admin.id,
+            username:
+              admin.username,
+            name:
+              admin.name,
+            role: 'admin',
+          },
+          SECRET,
+          {
+            expiresIn: '8h',
+          }
+        );
+
+      return json(200, {
+        ok: true,
+        token,
+        user: {
+          id: admin.id,
+          username:
+            admin.username,
+          name:
+            admin.name,
+          role: 'admin',
+        },
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CONSULTAR TRABAJADOR DESDE FORMULARIO PÚBLICO
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'GET' &&
+      requestPath ===
+        '/public/worker'
+    ) {
+      const dni =
+        String(
+          event.queryStringParameters
+            ?.dni || ''
+        ).trim();
+
+      if (!dni) {
+        return json(400, {
+          error:
+            'DNI requerido.',
+        });
+      }
+
+      const worker =
+        db.workers.find(
+          w =>
+            String(
+              w.dni || ''
+            ).trim() === dni &&
+            w.active !== false
+        );
+
+      if (!worker) {
+        return json(404, {
+          ok: false,
+          found: false,
+          error:
+            'Trabajador no encontrado.',
+        });
+      }
+
+      return json(200, {
+        ok: true,
+        found: true,
+        worker: {
+          id: worker.id,
+          dni: worker.dni,
+          names:
+            worker.names ||
+            worker.name ||
+            '',
+          position:
+            worker.position ||
+            worker.cargo ||
+            '',
+          area:
+            worker.area || '',
+          phone:
+            worker.phone || '',
+          email:
+            worker.email || '',
+        },
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CREAR SOLICITUD PÚBLICA
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'POST' &&
+      requestPath ===
+        '/public/permissions'
+    ) {
+      const body = parseBody(event);
+
+      const dni =
+        String(
+          body.dni || ''
+        ).trim();
+
+      const type =
+        String(
+          body.type || ''
+        ).trim();
+
+      const date =
+        qDate(body.date);
+
+      if (!dni) {
+        return json(400, {
+          error:
+            'DNI requerido.',
+        });
+      }
+
+      if (!type) {
+        return json(400, {
+          error:
+            'Tipo de permiso requerido.',
+        });
+      }
+
+      if (!date) {
+        return json(400, {
+          error:
+            'Fecha requerida.',
+        });
+      }
+
+      const worker =
+        db.workers.find(
+          w =>
+            String(
+              w.dni || ''
+            ).trim() === dni &&
+            w.active !== false
+        );
+
+      if (!worker) {
+        return json(404, {
+          error:
+            'No se encontró un trabajador activo con ese DNI.',
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | DOCUMENTO
+      |--------------------------------------------------------------------------
+      */
+
+      let documentData;
+
+      try {
+        documentData =
+          validateDocument(
+            body.document
+          );
+      } catch (error) {
+        return json(400, {
+          error:
+            error.message,
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | ID
+      |--------------------------------------------------------------------------
+      */
+
+      const id =
+        nextId(
+          db,
+          'permissions'
+        );
+
+      const permission = {
+        id,
+
+        worker_id:
+          worker.id,
+
+        type,
+
+        date,
+
+        exit_time:
+          body.exit_time ||
+          '',
+
+        return_time:
+          body.return_time ||
+          '',
+
+        reason:
+          body.reason ||
+          '',
+
+        observation:
+          body.observation ||
+          '',
+
+        document:
+          documentData.document,
+
+        document_name:
+          body.document_name ||
+          '',
+
+        document_type:
+          documentData.document_type,
+
+        status:
+          'Pendiente',
+
+        approved_by:
+          '',
+
+        approved_at:
+          '',
+
+        decision_reason:
+          '',
+
+        created_at:
+          nowISO(),
+      };
+
+      db.permissions.push(
+        permission
+      );
+
+      await saveDB(db);
+
+      return json(201, {
+        ok: true,
+        message:
+          'Solicitud registrada correctamente.',
+        permission:
+          enrichPermission(
+            permission,
+            db
+          ),
+        numeroSolicitud:
+          id,
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DESDE AQUÍ TODAS LAS RUTAS REQUIEREN LOGIN
+    |--------------------------------------------------------------------------
+    */
+
+    const authentication =
+      auth(event);
+
+    if (authentication.error) {
+      return authentication.error;
+    }
+
+    const user =
+      authentication.user;
+
+    /*
+    |--------------------------------------------------------------------------
+    | ME
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'GET' &&
+      requestPath === '/me'
+    ) {
+      return json(200, {
+        ok: true,
+        user,
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | WORKERS - LISTAR
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'GET' &&
+      requestPath === '/workers'
+    ) {
+      const params =
+        event.queryStringParameters ||
+        {};
+
+      const search =
+        String(
+          params.search || ''
+        )
+          .trim()
+          .toLowerCase();
+
+      let workers =
+        [...db.workers];
+
+      if (search) {
+        workers =
+          workers.filter(w =>
+            [
+              w.dni,
+              w.names,
+              w.name,
+              w.area,
+              w.position,
+              w.cargo,
+              w.phone,
+              w.email,
+            ]
+              .filter(Boolean)
+              .some(value =>
+                String(value)
+                  .toLowerCase()
+                  .includes(search)
+              )
+          );
+      }
+
+      return json(200, {
+        ok: true,
+        workers,
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CREAR WORKER
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'POST' &&
+      requestPath === '/workers'
+    ) {
+      const body =
+        parseBody(event);
+
+      const dni =
+        String(
+          body.dni || ''
+        ).trim();
+
+      const names =
+        String(
+          body.names ||
+          body.name ||
+          ''
+        ).trim();
+
+      if (!dni || !names) {
+        return json(400, {
+          error:
+            'DNI y nombres son obligatorios.',
+        });
+      }
+
+      const duplicate =
+        db.workers.find(
+          w =>
+            String(
+              w.dni || ''
+            ).trim() === dni
+        );
+
+      if (duplicate) {
+        return json(409, {
+          error:
+            'Ya existe un trabajador con ese DNI.',
+        });
+      }
+
+      const worker = {
+        id: nextId(
+          db,
+          'workers'
+        ),
+
+        dni,
+
+        names,
+
+        name: names,
+
+        area:
+          body.area || '',
+
+        position:
+          body.position ||
+          body.cargo ||
+          '',
+
+        cargo:
+          body.cargo ||
+          body.position ||
+          '',
+
+        phone:
+          body.phone || '',
+
+        email:
+          body.email || '',
+
+        active:
+          body.active !== false,
+
+        created_at:
+          nowISO(),
+      };
+
+      db.workers.push(
+        worker
+      );
+
+      await saveDB(db);
+
+      return json(201, {
+        ok: true,
+        worker,
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | EDITAR WORKER
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'PUT' &&
+      /^\/workers\/\d+$/.test(
+        requestPath
+      )
+    ) {
+      const id =
+        Number(
+          requestPath.split('/')[2]
+        );
+
+      const worker =
+        db.workers.find(
+          w =>
+            Number(w.id) === id
+        );
+
+      if (!worker) {
+        return json(404, {
+          error:
+            'Trabajador no encontrado.',
+        });
+      }
+
+      const body =
+        parseBody(event);
+
+      if (body.dni !== undefined) {
+        worker.dni =
+          String(
+            body.dni
+          ).trim();
+      }
+
+      if (
+        body.names !== undefined ||
+        body.name !== undefined
+      ) {
+        worker.names =
+          String(
+            body.names ??
+              body.name ??
+              ''
+          ).trim();
+
+        worker.name =
+          worker.names;
+      }
+
+      if (
+        body.area !== undefined
+      ) {
+        worker.area =
+          body.area;
+      }
+
+      if (
+        body.position !==
+          undefined ||
+        body.cargo !== undefined
+      ) {
+        worker.position =
+          body.position ??
+          body.cargo ??
+          '';
+
+        worker.cargo =
+          body.cargo ??
+          body.position ??
+          '';
+      }
+
+      if (
+        body.phone !==
+        undefined
+      ) {
+        worker.phone =
+          body.phone;
+      }
+
+      if (
+        body.email !==
+        undefined
+      ) {
+        worker.email =
+          body.email;
+      }
+
+      if (
+        body.active !==
+        undefined
+      ) {
+        worker.active =
+          Boolean(
+            body.active
+          );
+      }
+
+      await saveDB(db);
+
+      return json(200, {
+        ok: true,
+        worker,
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ELIMINAR WORKER
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'DELETE' &&
+      /^\/workers\/\d+$/.test(
+        requestPath
+      )
+    ) {
+      const id =
+        Number(
+          requestPath.split('/')[2]
+        );
+
+      const index =
+        db.workers.findIndex(
+          w =>
+            Number(w.id) === id
+        );
+
+      if (index === -1) {
+        return json(404, {
+          error:
+            'Trabajador no encontrado.',
+        });
+      }
+
+      db.workers.splice(
+        index,
+        1
+      );
+
+      db.permissions =
+        db.permissions.filter(
+          p =>
+            Number(
+              p.worker_id
+            ) !== id
+        );
+
+      db.attendance =
+        db.attendance.filter(
+          a =>
+            Number(
+              a.worker_id
+            ) !== id
+        );
+
+      db.signatures =
+        db.signatures.filter(
+          s =>
+            Number(
+              s.worker_id
+            ) !== id
+        );
+
+      await saveDB(db);
+
+      return json(200, {
+        ok: true,
+        message:
+          'Trabajador eliminado correctamente.',
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HISTORIAL WORKER
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'GET' &&
+      /^\/workers\/\d+\/history$/.test(
+        requestPath
+      )
+    ) {
+      const id =
+        Number(
+          requestPath.split('/')[2]
+        );
+
+      const worker =
+        db.workers.find(
+          w =>
+            Number(w.id) === id
+        );
+
+      if (!worker) {
+        return json(404, {
+          error:
+            'Trabajador no encontrado.',
+        });
+      }
+
+      const permissions =
+        db.permissions
+          .filter(
+            p =>
+              Number(
+                p.worker_id
+              ) === id
+          )
+          .map(p =>
+            enrichPermission(
+              p,
+              db
+            )
+          );
+
+      const attendance =
+        db.attendance.filter(
+          a =>
+            Number(
+              a.worker_id
+            ) === id
+        );
+
+      return json(200, {
+        ok: true,
+        worker,
+        permissions,
+        attendance,
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | PERMISSIONS - LISTAR
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'GET' &&
+      requestPath ===
+        '/permissions'
+    ) {
+      const params =
+        event.queryStringParameters ||
+        {};
+
+      const search =
+        String(
+          params.search || ''
+        )
+          .trim()
+          .toLowerCase();
+
+      const status =
+        String(
+          params.status || ''
+        ).trim();
+
+      const type =
+        String(
+          params.type || ''
+        ).trim();
+
+      const from =
+        qDate(params.from);
+
+      const to =
+        qDate(params.to);
+
+      let permissions =
+        db.permissions.map(
+          p =>
+            enrichPermission(
+              p,
+              db
+            )
+        );
+
+      if (search) {
+        permissions =
+          permissions.filter(
+            p =>
+              [
+                p.worker_name,
+                p.worker_dni,
+                p.worker_area,
+                p.worker_position,
+                p.type,
+                p.reason,
+                p.observation,
+              ]
+                .filter(Boolean)
+                .some(value =>
+                  String(value)
+                    .toLowerCase()
+                    .includes(search)
+                )
+          );
+      }
+
+      if (status) {
+        permissions =
+          permissions.filter(
+            p =>
+              String(
+                p.status
+              ) === status
+          );
+      }
+
+      if (type) {
+        permissions =
+          permissions.filter(
+            p =>
+              String(
+                p.type
+              ) === type
+          );
+      }
+
+      if (from) {
+        permissions =
+          permissions.filter(
+            p =>
+              qDate(p.date) >=
+              from
+          );
+      }
+
+      if (to) {
+        permissions =
+          permissions.filter(
+            p =>
+              qDate(p.date) <=
+              to
+          );
+      }
+
+      permissions.sort(
+        (a, b) =>
+          new Date(
+            b.created_at || 0
+          ) -
+          new Date(
+            a.created_at || 0
+          )
+      );
+
+      return json(200, {
+        ok: true,
+        permissions,
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CREAR PERMISSION DESDE DASHBOARD
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'POST' &&
+      requestPath ===
+        '/permissions'
+    ) {
+      const body =
+        parseBody(event);
+
+      const workerId =
+        Number(
+          body.worker_id
+        );
+
+      const worker =
+        db.workers.find(
+          w =>
+            Number(w.id) ===
+            workerId
+        );
+
+      if (!worker) {
+        return json(404, {
+          error:
+            'Trabajador no encontrado.',
+        });
+      }
+
+      let documentData;
+
+      try {
+        documentData =
+          validateDocument(
+            body.document
+          );
+      } catch (error) {
+        return json(400, {
+          error:
+            error.message,
+        });
+      }
+
+      const permission = {
+        id: nextId(
+          db,
+          'permissions'
+        ),
+
+        worker_id:
+          workerId,
+
+        type:
+          body.type || '',
+
+        date:
+          qDate(body.date),
+
+        exit_time:
+          body.exit_time ||
+          '',
+
+        return_time:
+          body.return_time ||
+          '',
+
+        reason:
+          body.reason ||
+          '',
+
+        observation:
+          body.observation ||
+          '',
+
+        document:
+          documentData.document,
+
+        document_name:
+          body.document_name ||
+          '',
+
+        document_type:
+          documentData.document_type,
+
+        status:
+          body.status ||
+          'Pendiente',
+
+        approved_by:
+          '',
+
+        approved_at:
+          '',
+
+        decision_reason:
+          '',
+
+        created_at:
+          nowISO(),
+      };
+
+      db.permissions.push(
+        permission
+      );
+
+      await saveDB(db);
+
+      return json(201, {
+        ok: true,
+        permission:
+          enrichPermission(
+            permission,
+            db
+          ),
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ELIMINAR PERMISSION
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'DELETE' &&
+      /^\/permissions\/\d+$/.test(
+        requestPath
+      )
+    ) {
+      const id =
+        Number(
+          requestPath.split('/')[2]
+        );
+
+      const index =
+        db.permissions.findIndex(
+          p =>
+            Number(p.id) === id
+        );
+
+      if (index === -1) {
+        return json(404, {
+          error:
+            'Solicitud no encontrada.',
+        });
+      }
+
+      db.permissions.splice(
+        index,
+        1
+      );
+
+      db.signatures =
+        db.signatures.filter(
+          s =>
+            Number(
+              s.permission_id
+            ) !== id
+        );
+
+      await saveDB(db);
+
+      return json(200, {
+        ok: true,
+        message:
+          'Solicitud eliminada correctamente.',
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CAMBIAR ESTADO DE PERMISSION
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'PUT' &&
+      /^\/permissions\/\d+\/status$/.test(
+        requestPath
+      )
+    ) {
+      const id =
+        Number(
+          requestPath.split('/')[2]
+        );
+
+      const permission =
+        db.permissions.find(
+          p =>
+            Number(p.id) === id
+        );
+
+      if (!permission) {
+        return json(404, {
+          error:
+            'Solicitud no encontrada.',
+        });
+      }
+
+      const body =
+        parseBody(event);
+
+      const newStatus =
+        String(
+          body.status || ''
+        ).trim();
+
+      if (
+        ![
+          'Pendiente',
+          'Aprobado',
+          'Rechazado',
+        ].includes(
+          newStatus
+        )
+      ) {
+        return json(400, {
+          error:
+            'Estado inválido.',
+        });
+      }
+
+      if (
+        newStatus ===
+          'Rechazado' &&
+        !String(
+          body.reason ||
+            body.decision_reason ||
+            ''
+        ).trim()
+      ) {
+        return json(400, {
+          error:
+            'Debe indicar el motivo del rechazo.',
+        });
+      }
+
+      permission.status =
+        newStatus;
+
+      permission.decision_reason =
+        String(
+          body.reason ||
+            body.decision_reason ||
+            ''
+        ).trim();
+
+      if (
+        newStatus ===
+          'Pendiente'
+      ) {
+        permission.approved_by =
+          '';
+
+        permission.approved_at =
+          '';
+      } else {
+        permission.approved_by =
+          user.name ||
+          user.username ||
+          '';
+
+        permission.approved_at =
+          nowISO();
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | FIRMA
+      |--------------------------------------------------------------------------
+      */
+
+      if (
+        newStatus ===
+          'Aprobado' ||
+        newStatus ===
+          'Rechazado'
+      ) {
+        const signature = {
+          id: nextId(
+            db,
+            'signatures'
+          ),
+
+          permission_id:
+            permission.id,
+
+          user_id:
+            user.id,
+
+          user_name:
+            user.name ||
+            user.username ||
+            '',
+
+          status:
+            newStatus,
+
+          reason:
+            permission.decision_reason ||
+            '',
+
+          created_at:
+            nowISO(),
+        };
+
+        db.signatures.push(
+          signature
+        );
+      }
+
+      await saveDB(db);
+
+      return json(200, {
+        ok: true,
+        permission:
+          enrichPermission(
+            permission,
+            db
+          ),
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ATTENDANCE - LISTAR
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'GET' &&
+      requestPath ===
+        '/attendance'
+    ) {
+      const params =
+        event.queryStringParameters ||
+        {};
+
+      const date =
+        qDate(params.date);
+
+      let attendance =
+        [...db.attendance];
+
+      if (date) {
+        attendance =
+          attendance.filter(
+            a =>
+              qDate(a.date) ===
+              date
+          );
+      }
+
+      attendance =
+        attendance.map(a => {
+          const worker =
+            db.workers.find(
+              w =>
+                Number(w.id) ===
+                Number(
+                  a.worker_id
+                )
+            );
+
+          return {
+            ...a,
+            worker:
+              worker || null,
+          };
+        });
+
+      return json(200, {
+        ok: true,
+        attendance,
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ATTENDANCE - CREAR
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'POST' &&
+      requestPath ===
+        '/attendance'
+    ) {
+      const body =
+        parseBody(event);
+
+      const workerId =
+        Number(
+          body.worker_id
+        );
+
+      const worker =
+        db.workers.find(
+          w =>
+            Number(w.id) ===
+            workerId
+        );
+
+      if (!worker) {
+        return json(404, {
+          error:
+            'Trabajador no encontrado.',
+        });
+      }
+
+      const attendance = {
+        id: nextId(
+          db,
+          'attendance'
+        ),
+
+        worker_id:
+          workerId,
+
+        date:
+          qDate(
+            body.date
+          ) ||
+          qDate(
+            nowISO()
+          ),
+
+        entry_time:
+          body.entry_time ||
+          '',
+
+        exit_time:
+          body.exit_time ||
+          '',
+
+        status:
+          body.status ||
+          'Presente',
+
+        observation:
+          body.observation ||
+          '',
+
+        created_at:
+          nowISO(),
+      };
+
+      db.attendance.push(
+        attendance
+      );
+
+      await saveDB(db);
+
+      return json(201, {
+        ok: true,
+        attendance,
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | NOTIFICACIONES
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'GET' &&
+      requestPath ===
+        '/notifications'
+    ) {
+      const pending =
+        db.permissions.filter(
+          p =>
+            p.status ===
+            'Pendiente'
+        );
+
+      return json(200, {
+        ok: true,
+        notifications:
+          pending.map(p => {
+            const worker =
+              db.workers.find(
+                w =>
+                  Number(
+                    w.id
+                  ) ===
+                  Number(
+                    p.worker_id
+                  )
+              );
+
+            return {
+              id: p.id,
+              type:
+                'permission',
+              title:
+                'Nueva solicitud de permiso',
+              message:
+                `${
+                  worker?.names ||
+                  worker?.name ||
+                  'Trabajador'
+                } tiene una solicitud pendiente.`,
+              permission:
+                enrichPermission(
+                  p,
+                  db
+                ),
+              created_at:
+                p.created_at,
+            };
+          }),
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DASHBOARD
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'GET' &&
+      requestPath ===
+        '/dashboard'
+    ) {
+      const workers =
+        db.workers;
+
+      const permissions =
+        db.permissions;
+
+      const today =
+        qDate(
+          new Date()
+        );
+
+      const activeWorkers =
+        workers.filter(
+          w =>
+            w.active !==
+            false
+        ).length;
+
+      const inactiveWorkers =
+        workers.filter(
+          w =>
+            w.active ===
+            false
+        ).length;
+
+      const pending =
+        permissions.filter(
+          p =>
+            p.status ===
+            'Pendiente'
+        ).length;
+
+      const approved =
+        permissions.filter(
+          p =>
+            p.status ===
+            'Aprobado'
+        ).length;
+
+      const rejected =
+        permissions.filter(
+          p =>
+            p.status ===
+            'Rechazado'
+        ).length;
+
+      const todayPermissions =
+        permissions.filter(
+          p =>
+            qDate(
+              p.date
+            ) === today
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | SEMANA
+      |--------------------------------------------------------------------------
+      */
+
+      const now =
+        new Date();
+
+      const day =
+        now.getDay();
+
+      const diff =
+        day === 0
+          ? -6
+          : 1 - day;
+
+      const weekStart =
+        new Date(now);
+
+      weekStart.setDate(
+        now.getDate() +
+          diff
+      );
+
+      weekStart.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const weekEnd =
+        new Date(
+          weekStart
+        );
+
+      weekEnd.setDate(
+        weekStart.getDate() +
+          6
+      );
+
+      weekEnd.setHours(
+        23,
+        59,
+        59,
+        999
+      );
+
+      const weekly =
+        permissions.filter(
+          p => {
+            const d =
+              new Date(
+                `${qDate(
+                  p.date
+                )}T00:00:00`
+              );
+
+            return (
+              d >=
+                weekStart &&
+              d <=
+                weekEnd
+            );
+          }
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | MES
+      |--------------------------------------------------------------------------
+      */
+
+      const month =
+        now.getMonth();
+
+      const year =
+        now.getFullYear();
+
+      const monthly =
+        permissions.filter(
+          p => {
+            const d =
+              new Date(
+                `${qDate(
+                  p.date
+                )}T00:00:00`
+              );
+
+            return (
+              d.getMonth() ===
+                month &&
+              d.getFullYear() ===
+                year
+            );
+          }
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | POR TIPO
+      |--------------------------------------------------------------------------
+      */
+
+      const byType = {};
+
+      permissions.forEach(
+        p => {
+          const type =
+            p.type ||
+            'Sin tipo';
+
+          byType[type] =
+            (byType[type] ||
+              0) + 1;
+        }
+      );
+
+      /*
+      |--------------------------------------------------------------------------
+      | RANKING DE TRABAJADORES
+      |--------------------------------------------------------------------------
+      */
+
+      const rankingMap =
+        {};
+
+      permissions.forEach(
+        p => {
+          const worker =
+            workers.find(
+              w =>
+                Number(
+                  w.id
+                ) ===
+                Number(
+                  p.worker_id
+                )
+            );
+
+          if (!worker)
+            return;
+
+          const id =
+            worker.id;
+
+          if (
+            !rankingMap[id]
+          ) {
+            rankingMap[id] = {
+              worker_id:
+                id,
+
+              dni:
+                worker.dni ||
+                '',
+
+              name:
+                worker.names ||
+                worker.name ||
+                '',
+
+              area:
+                worker.area ||
+                '',
+
+              position:
+                worker.position ||
+                worker.cargo ||
+                '',
+
+              total: 0,
+            };
+          }
+
+          rankingMap[id].total++;
+        }
+      );
+
+      const ranking =
+        Object.values(
+          rankingMap
+        ).sort(
+          (a, b) =>
+            b.total -
+            a.total
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | RESPUESTA
+      |--------------------------------------------------------------------------
+      */
+
+      return json(200, {
+        ok: true,
+
+        activeWorkers,
+
+        inactiveWorkers,
+
+        totalWorkers:
+          workers.length,
+
+        totalPermissions:
+          permissions.length,
+
+        pending,
+
+        approved,
+
+        rejected,
+
+        today:
+          todayPermissions.length,
+
+        weekly:
+          weekly.length,
+
+        monthly:
+          monthly.length,
+
+        byType,
+
+        ranking,
+
+        recent:
+          permissions
+            .slice()
+            .sort(
+              (a, b) =>
+                new Date(
+                  b.created_at ||
+                    0
+                ) -
+                new Date(
+                  a.created_at ||
+                    0
+                )
+            )
+            .slice(0, 10)
+            .map(p =>
+              enrichPermission(
+                p,
+                db
+              )
+            ),
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | REPORTE EXCEL
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'GET' &&
+      requestPath ===
+        '/reports/excel'
+    ) {
+      const buffer =
+        await reportExcel(
+          db
+        );
+
+      return {
+        statusCode: 200,
+
+        isBase64Encoded:
+          true,
+
+        headers: {
+          'Content-Type':
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+
+          'Content-Disposition':
+            'attachment; filename="reporte-permisos.xlsx"',
+
+          'Access-Control-Allow-Origin':
+            '*',
+
+          'Access-Control-Allow-Headers':
+            'Content-Type, Authorization',
+
+          'Access-Control-Allow-Methods':
+            'GET, POST, PUT, DELETE, OPTIONS',
+        },
+
+        body:
+          buffer.toString(
+            'base64'
+          ),
+      };
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | REPORTE PDF
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'GET' &&
+      requestPath ===
+        '/reports/pdf'
+    ) {
+      const buffer =
+        await reportPDF(
+          db
+        );
+
+      return {
+        statusCode: 200,
+
+        isBase64Encoded:
+          true,
+
+        headers: {
+          'Content-Type':
+            'application/pdf',
+
+          'Content-Disposition':
+            'attachment; filename="reporte-permisos.pdf"',
+
+          'Access-Control-Allow-Origin':
+            '*',
+
+          'Access-Control-Allow-Headers':
+            'Content-Type, Authorization',
+
+          'Access-Control-Allow-Methods':
+            'GET, POST, PUT, DELETE, OPTIONS',
+        },
+
+        body:
+          buffer.toString(
+            'base64'
+          ),
+      };
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | RUTA NO ENCONTRADA
+    |--------------------------------------------------------------------------
+    */
+
+    return json(404, {
+      error:
+        'Ruta no encontrada.',
+      path:
+        requestPath,
+      method,
+    });
+  } catch (error) {
+    console.error(
+      'ERROR API:',
+      error
+    );
+
+    return json(500, {
+      error:
+        error.message ||
+        'Error interno del servidor.',
+    });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| EXPORT
+|--------------------------------------------------------------------------
+*/
+
+module.exports = {
+  handler,
+  pool,
+};
