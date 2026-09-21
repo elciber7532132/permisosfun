@@ -1574,6 +1574,10 @@ ${permissionRows(rows)}
 }
 
 
+/* =========================================================
+   FILAS DE PERMISOS
+========================================================= */
+
 function permissionRows(rows){
 
   return rows.length
@@ -1657,8 +1661,16 @@ Ver
 </button>
 
 `
-
 }
+
+
+<button
+class="danger"
+onclick="deletePermission(${p.id})"
+title="Eliminar permiso"
+>
+🗑️ Eliminar
+</button>
 
 </td>
 
@@ -1684,6 +1696,53 @@ No hay permisos registrados.
 `;
 }
 
+
+/* =========================================================
+   ELIMINAR PERMISO
+========================================================= */
+
+async function deletePermission(id){
+
+  const confirmar=
+    confirm(
+      "¿Estás seguro de que deseas eliminar este registro de permiso?\n\n"+
+      "Esta acción eliminará el registro definitivamente."
+    );
+
+  if(!confirmar){
+    return;
+  }
+
+  try{
+
+    await api(
+      "/permissions/"+id,
+      {
+        method:"DELETE"
+      }
+    );
+
+    toast(
+      "Permiso eliminado correctamente"
+    );
+
+    await loadPermissions();
+
+    await loadNotifications();
+
+  }catch(e){
+
+    toast(
+      e.message ||
+      "No se pudo eliminar el permiso"
+    );
+  }
+}
+
+
+/* =========================================================
+   FILTRAR PERMISOS
+========================================================= */
 
 async function filterPermissions(){
 
@@ -2279,7 +2338,9 @@ onclick="decidePermission(${p.id},'Aprobado')"
 
 `
 
-:`
+:
+
+`
 
 <div class="review-note">
 
