@@ -1,4 +1,4 @@
-```javascript
+javascript
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
@@ -4176,4 +4176,4 @@ async function downloadReport(type) {
 
   }
 }
-```
+
