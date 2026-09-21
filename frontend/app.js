@@ -1,45 +1,46 @@
-const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
 
-const API=window.API_BASE||'/api';
+const API = window.API_BASE || '/api';
 
-let token=localStorage.getItem("token")||"";
+let token = localStorage.getItem("token") || "";
 
-const esc=s=>String(s??"").replace(
+const esc = s => String(s ?? "").replace(
   /[&<>"']/g,
-  m=>({
-    "&":"&amp;",
-    "<":"&lt;",
-    ">":"&gt;",
-    '"':"&quot;",
-    "'":"&#039;"
+  m => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
   }[m])
 );
 
-const today=new Date().toISOString().slice(0,10);
+const today = new Date().toISOString().slice(0, 10);
 
 
 /* =========================================================
    PANTALLAS
 ========================================================= */
 
-function showLogin(){
+function showLogin() {
   $("#landing").classList.add("hidden");
   $("#login").classList.remove("hidden");
   $("#app").classList.add("hidden");
 
   setTimeout(
-    ()=>$("#user").focus(),
+    () => $("#user").focus(),
     50
   );
 }
 
-function showLanding(){
+function showLanding() {
   $("#landing").classList.remove("hidden");
   $("#login").classList.add("hidden");
   $("#app").classList.add("hidden");
 }
 
-function showApp(){
+function showApp() {
   $("#landing").classList.add("hidden");
   $("#login").classList.add("hidden");
   $("#app").classList.remove("hidden");
@@ -50,54 +51,57 @@ function showApp(){
    API
 ========================================================= */
 
-function headers(json=true){
+function headers(json = true) {
 
-  const h={
-    Authorization:"Bearer "+token
+  const h = {
+    Authorization: "Bearer " + token
   };
 
-  if(json){
-    h["Content-Type"]="application/json";
+  if (json) {
+    h["Content-Type"] = "application/json";
   }
 
   return h;
 }
 
-async function api(url,opt={}){
+async function api(url, opt = {}) {
 
-  const r=await fetch(
-    API+url,
+  const r = await fetch(
+    API + url,
     {
       ...opt,
-      headers:{
+      headers: {
         ...headers(
-          opt.body!==undefined
+          opt.body !== undefined
         ),
-        ...(opt.headers||{})
+        ...(opt.headers || {})
       }
     }
   );
 
-  if(r.status===401){
+  if (r.status === 401) {
+
     logout();
+
     throw Error(
       "Sesión expirada"
     );
   }
 
-  const t=
+  const t =
     r.headers.get(
       "content-type"
-    )||"";
+    ) || "";
 
-  const d=
+  const d =
     t.includes("json")
       ? await r.json()
       : await r.blob();
 
-  if(!r.ok){
+  if (!r.ok) {
+
     throw Error(
-      d.error||
+      d.error ||
       "Error"
     );
   }
@@ -110,28 +114,28 @@ async function api(url,opt={}){
    UTILIDADES
 ========================================================= */
 
-function toast(s){
+function toast(s) {
 
-  const e=$("#toast");
+  const e = $("#toast");
 
-  e.textContent=s;
+  e.textContent = s;
 
   e.classList.add(
     "toast-show"
   );
 
   setTimeout(
-    ()=>e.classList.remove(
+    () => e.classList.remove(
       "toast-show"
     ),
     2500
   );
 }
 
-function openModal(html){
+function openModal(html) {
 
   $("#modalContent")
-    .innerHTML=html;
+    .innerHTML = html;
 
   $("#modal")
     .classList.remove(
@@ -139,7 +143,7 @@ function openModal(html){
     );
 }
 
-function closeModal(){
+function closeModal() {
 
   $("#modal")
     .classList.add(
@@ -147,13 +151,13 @@ function closeModal(){
     );
 }
 
-function logout(){
+function logout() {
 
   localStorage.removeItem(
     "token"
   );
 
-  token="";
+  token = "";
 
   $("#app")
     .classList.add(
@@ -163,30 +167,30 @@ function logout(){
   showLanding();
 }
 
-function initials(n){
+function initials(n) {
 
-  return String(n||"")
+  return String(n || "")
     .split(" ")
-    .slice(0,2)
-    .map(x=>x[0])
+    .slice(0, 2)
+    .map(x => x[0])
     .join("")
     .toUpperCase();
 }
 
-function badge(s){
+function badge(s) {
 
-  let c=
-    s==="Aprobado"
-      ?"green"
-      :s==="Rechazado"
-      ?"red"
-      :s==="Pendiente"
-      ?"amber"
-      :s==="Activo"
-      ?"green"
-      :s==="Inactivo"
-      ?"gray"
-      :"blue";
+  let c =
+    s === "Aprobado"
+      ? "green"
+      : s === "Rechazado"
+      ? "red"
+      : s === "Pendiente"
+      ? "amber"
+      : s === "Activo"
+      ? "green"
+      : s === "Inactivo"
+      ? "gray"
+      : "blue";
 
   return `
     <span class="badge ${c}">
@@ -197,21 +201,243 @@ function badge(s){
 
 
 /* =========================================================
+   DOCUMENTOS SUSTENTATORIOS
+========================================================= */
+
+function documentInfo(p) {
+
+  const data = p.document || "";
+  const name =
+    p.document_name ||
+    "Documento sustentatorio";
+
+  const type =
+    p.document_type || "";
+
+  if (!data) {
+
+    return `
+      <div class="empty">
+        No se adjuntó documento sustentatorio.
+      </div>
+    `;
+  }
+
+  /*
+     El backend guarda el archivo como Data URL:
+     data:image/png;base64,...
+     data:application/pdf;base64,...
+  */
+
+  let html = `
+    <div
+      style="
+        padding:14px;
+        border:1px solid #e2e8f0;
+        border-radius:10px;
+        background:#f8fafc;
+      "
+    >
+
+      <div
+        style="
+          display:flex;
+          align-items:center;
+          gap:10px;
+          margin-bottom:12px;
+        "
+      >
+
+        <span style="font-size:25px;">
+          📎
+        </span>
+
+        <div>
+          <b>${esc(name)}</b>
+
+          ${
+            type
+              ? `
+                <small
+                  style="
+                    display:block;
+                    color:#718096;
+                    margin-top:3px;
+                  "
+                >
+                  ${esc(type)}
+                </small>
+              `
+              : ""
+          }
+
+        </div>
+
+      </div>
+
+      <div
+        style="
+          display:flex;
+          gap:8px;
+          flex-wrap:wrap;
+        "
+      >
+
+        <a
+          href="${esc(data)}"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="secondary"
+          style="
+            display:inline-block;
+            text-decoration:none;
+            padding:9px 13px;
+          "
+        >
+          👁️ Ver documento
+        </a>
+
+        <a
+          href="${esc(data)}"
+          download="${esc(name)}"
+          class="primary"
+          style="
+            display:inline-block;
+            text-decoration:none;
+            padding:9px 13px;
+          "
+        >
+          📥 Descargar
+        </a>
+
+      </div>
+
+    </div>
+  `;
+
+  /*
+     Si es una imagen, mostramos una vista previa.
+  */
+
+  if (
+    type.startsWith("image/")
+  ) {
+
+    html = `
+      <div
+        style="
+          padding:14px;
+          border:1px solid #e2e8f0;
+          border-radius:10px;
+          background:#f8fafc;
+        "
+      >
+
+        <div
+          style="
+            display:flex;
+            align-items:center;
+            gap:10px;
+            margin-bottom:12px;
+          "
+        >
+
+          <span style="font-size:25px;">
+            🖼️
+          </span>
+
+          <div>
+            <b>${esc(name)}</b>
+
+            <small
+              style="
+                display:block;
+                color:#718096;
+                margin-top:3px;
+              "
+            >
+              Imagen adjunta
+            </small>
+          </div>
+
+        </div>
+
+        <img
+          src="${esc(data)}"
+          alt="${esc(name)}"
+          style="
+            max-width:100%;
+            max-height:450px;
+            display:block;
+            margin:0 auto 15px;
+            border-radius:8px;
+            border:1px solid #e2e8f0;
+            object-fit:contain;
+            background:white;
+          "
+        >
+
+        <div
+          style="
+            display:flex;
+            gap:8px;
+            flex-wrap:wrap;
+          "
+        >
+
+          <a
+            href="${esc(data)}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="secondary"
+            style="
+              display:inline-block;
+              text-decoration:none;
+              padding:9px 13px;
+            "
+          >
+            👁️ Abrir imagen
+          </a>
+
+          <a
+            href="${esc(data)}"
+            download="${esc(name)}"
+            class="primary"
+            style="
+              display:inline-block;
+              text-decoration:none;
+              padding:9px 13px;
+            "
+          >
+            📥 Descargar
+          </a>
+
+        </div>
+
+      </div>
+    `;
+  }
+
+  return html;
+}
+
+
+/* =========================================================
    LOGIN
 ========================================================= */
 
-$("#loginForm").onsubmit=async e=>{
+$("#loginForm").onsubmit = async e => {
 
   e.preventDefault();
 
-  try{
+  try {
 
-    const d=
+    const d =
       await api(
         "/login",
         {
-          method:"POST",
-          body:JSON.stringify({
+          method: "POST",
+          body: JSON.stringify({
             username:
               $("#user").value,
             password:
@@ -220,7 +446,7 @@ $("#loginForm").onsubmit=async e=>{
         }
       );
 
-    token=d.token;
+    token = d.token;
 
     localStorage.setItem(
       "token",
@@ -230,13 +456,13 @@ $("#loginForm").onsubmit=async e=>{
     showApp();
 
     $("#sideName")
-      .textContent=
+      .textContent =
       d.user.name;
 
     loadDashboard();
     loadNotifications();
 
-  }catch(x){
+  } catch (x) {
 
     toast(
       x.message
@@ -244,11 +470,11 @@ $("#loginForm").onsubmit=async e=>{
   }
 };
 
-$("#logout").onclick=logout;
+$("#logout").onclick = logout;
 
-$("#openLogin").onclick=showLogin;
+$("#openLogin").onclick = showLogin;
 
-$("#openLogin2").onclick=showLogin;
+$("#openLogin2").onclick = showLogin;
 
 
 /* =========================================================
@@ -256,10 +482,10 @@ $("#openLogin2").onclick=showLogin;
 ========================================================= */
 
 $$(".nav").forEach(
-  b=>b.onclick=()=>{
+  b => b.onclick = () => {
 
     $$(".nav").forEach(
-      x=>x.classList.remove(
+      x => x.classList.remove(
         "active"
       )
     );
@@ -269,24 +495,24 @@ $$(".nav").forEach(
     );
 
     ({
-      dashboard:loadDashboard,
-      workers:loadWorkers,
-      permissions:loadPermissions,
-      attendance:loadAttendance,
-      reports:loadReports
+      dashboard: loadDashboard,
+      workers: loadWorkers,
+      permissions: loadPermissions,
+      attendance: loadAttendance,
+      reports: loadReports
     }[b.dataset.page])();
   }
 );
 
 
 $("#todayLabel")
-  .textContent=
+  .textContent =
   new Date().toLocaleDateString(
     "es-PE",
     {
-      weekday:"long",
-      day:"2-digit",
-      month:"long"
+      weekday: "long",
+      day: "2-digit",
+      month: "long"
     }
   );
 
@@ -295,18 +521,18 @@ $("#todayLabel")
    RECUPERAR SESIÓN
 ========================================================= */
 
-if(token){
+if (token) {
 
   showApp();
 
   api("/me")
     .then(
-      d=>
+      d =>
         $("#sideName")
-          .textContent=d.name
+          .textContent = d.name
     )
     .catch(
-      ()=>{
+      () => {
         logout();
       }
     );
@@ -320,7 +546,7 @@ if(token){
     15000
   );
 
-}else{
+} else {
 
   showLanding();
 }
@@ -333,22 +559,27 @@ if(token){
 function layout(
   title,
   sub,
-  actions=""
-){
+  actions = ""
+) {
 
   $("#pageTitle")
-    .textContent=title;
+    .textContent = title;
 
   return `
     <div class="page-head">
+
       <div>
+
         <h3>${title}</h3>
+
         <p>${sub}</p>
+
       </div>
 
       <div class="actions">
         ${actions}
       </div>
+
     </div>
   `;
 }
@@ -358,16 +589,16 @@ function layout(
    DASHBOARD
 ========================================================= */
 
-async function loadDashboard(){
+async function loadDashboard() {
 
-  try{
+  try {
 
-    const d=
+    const d =
       await api(
         "/dashboard"
       );
 
-    $("#content").innerHTML=
+    $("#content").innerHTML =
       layout(
         "Resumen general",
         "Indicadores del entorno empresarial"
@@ -379,6 +610,7 @@ async function loadDashboard(){
 <div class="stats">
 
 <div class="stat">
+
 <span class="label">
 Trabajadores activos
 </span>
@@ -394,10 +626,12 @@ Personal registrado
 <span class="circle">
 ♙
 </span>
+
 </div>
 
 
 <div class="stat">
+
 <span class="label">
 Permisos registrados
 </span>
@@ -413,10 +647,12 @@ ${d.weekly} esta semana
 <span class="circle">
 ◷
 </span>
+
 </div>
 
 
 <div class="stat">
+
 <span class="label">
 Pendientes
 </span>
@@ -432,10 +668,12 @@ Requieren revisión
 <span class="circle">
 !
 </span>
+
 </div>
 
 
 <div class="stat">
+
 <span class="label">
 Tardanzas semana
 </span>
@@ -451,6 +689,7 @@ Registros con demora
 <span class="circle">
 ⏱
 </span>
+
 </div>
 
 </div>
@@ -470,7 +709,7 @@ ${
 d.byType.length
 
 ? d.byType.map(
-x=>`
+x => `
 
 <div class="bar-row">
 
@@ -487,7 +726,7 @@ Math.min(
 x.total /
 Math.max(
 ...d.byType.map(
-a=>a.total
+a => a.total
 )
 ) *
 100
@@ -524,6 +763,7 @@ Resumen del período
 </h4>
 
 <div class="kpi-line">
+
 <span>
 Salidas de hoy
 </span>
@@ -531,9 +771,11 @@ Salidas de hoy
 <b>
 ${d.today}
 </b>
+
 </div>
 
 <div class="kpi-line">
+
 <span>
 Esta semana
 </span>
@@ -541,9 +783,11 @@ Esta semana
 <b>
 ${d.weekly}
 </b>
+
 </div>
 
 <div class="kpi-line">
+
 <span>
 Este mes
 </span>
@@ -551,9 +795,11 @@ Este mes
 <b>
 ${d.monthly}
 </b>
+
 </div>
 
 <div class="kpi-line">
+
 <span>
 Aprobados
 </span>
@@ -561,6 +807,7 @@ Aprobados
 <b>
 ${d.approved}
 </b>
+
 </div>
 
 </div>
@@ -592,9 +839,13 @@ style="border:0"
 <thead>
 
 <tr>
+
 <th>Trabajador</th>
+
 <th>Área</th>
+
 <th>Total</th>
+
 </tr>
 
 </thead>
@@ -602,7 +853,7 @@ style="border:0"
 <tbody>
 
 ${d.ranking.map(
-x=>`
+x => `
 
 <tr>
 
@@ -623,7 +874,7 @@ ${esc(x.names)}
 </td>
 
 <td>
-${esc(x.area||"-")}
+${esc(x.area || "-")}
 </td>
 
 <td>
@@ -657,7 +908,7 @@ para ver estadísticas.
 </div>
 `;
 
-  }catch(e){
+  } catch (e) {
 
     toast(
       e.message
@@ -670,14 +921,14 @@ para ver estadísticas.
    TRABAJADORES
 ========================================================= */
 
-async function loadWorkers(){
+async function loadWorkers() {
 
-  const rows=
+  const rows =
     await api(
       "/workers"
     );
 
-  $("#content").innerHTML=
+  $("#content").innerHTML =
     layout(
       "Trabajadores",
       "Registro y administración del personal",
@@ -767,12 +1018,12 @@ ${workerRows(rows)}
    FILAS DE TRABAJADORES
 ========================================================= */
 
-function workerRows(rows){
+function workerRows(rows) {
 
   return rows.length
 
   ? rows.map(
-      w=>`
+      w => `
 
 <tr>
 
@@ -799,22 +1050,22 @@ ${esc(w.dni)}
 
 
 <td>
-${esc(w.position||"-")}
+${esc(w.position || "-")}
 </td>
 
 
 <td>
-${esc(w.area||"-")}
+${esc(w.area || "-")}
 </td>
 
 
 <td>
-${esc(w.phone||"-")}
+${esc(w.phone || "-")}
 </td>
 
 
 <td>
-${esc(w.hire_date||"-")}
+${esc(w.hire_date || "-")}
 </td>
 
 
@@ -842,7 +1093,7 @@ Editar
 
 
 ${
-w.status==="Activo"
+w.status === "Activo"
 
 ?
 
@@ -899,18 +1150,18 @@ No hay trabajadores registrados.
    BUSCAR TRABAJADOR
 ========================================================= */
 
-async function filterWorkers(){
+async function filterWorkers() {
 
-  const rows=
+  const rows =
     await api(
-      "/workers?search="+
+      "/workers?search=" +
       encodeURIComponent(
         $("#workerSearch").value
       )
     );
 
   $("#workerRows")
-    .innerHTML=
+    .innerHTML =
       workerRows(rows);
 }
 
@@ -919,36 +1170,36 @@ async function filterWorkers(){
    ELIMINAR TRABAJADOR
 ========================================================= */
 
-async function deleteWorker(id){
+async function deleteWorker(id) {
 
-  const confirmar=
+  const confirmar =
     confirm(
-      "¿Estás seguro de que deseas eliminar este trabajador?\n\n"+
-      "El trabajador pasará a estado INACTIVO y conservará su historial."
+      "¿Estás seguro de que deseas eliminar este trabajador?\n\n" +
+      "Esta acción eliminará definitivamente al trabajador y sus registros relacionados."
     );
 
-  if(!confirmar){
+  if (!confirmar) {
     return;
   }
 
-  try{
+  try {
 
     await api(
-      "/workers/"+id,
+      "/workers/" + id,
       {
-        method:"DELETE"
+        method: "DELETE"
       }
     );
 
     toast(
-      "Trabajador eliminado correctamente"
+      "Trabajador eliminado definitivamente"
     );
 
     loadWorkers();
 
     loadDashboard();
 
-  }catch(e){
+  } catch (e) {
 
     toast(
       e.message ||
@@ -962,25 +1213,25 @@ async function deleteWorker(id){
    ACTIVAR TRABAJADOR
 ========================================================= */
 
-async function activateWorker(id){
+async function activateWorker(id) {
 
-  const confirmar=
+  const confirmar =
     confirm(
       "¿Deseas volver a activar este trabajador?"
     );
 
-  if(!confirmar){
+  if (!confirmar) {
     return;
   }
 
-  try{
+  try {
 
     await api(
-      "/workers/"+id,
+      "/workers/" + id,
       {
-        method:"PUT",
-        body:JSON.stringify({
-          status:"Activo"
+        method: "PUT",
+        body: JSON.stringify({
+          status: "Activo"
         })
       }
     );
@@ -993,7 +1244,7 @@ async function activateWorker(id){
 
     loadDashboard();
 
-  }catch(e){
+  } catch (e) {
 
     toast(
       e.message ||
@@ -1007,15 +1258,15 @@ async function activateWorker(id){
    FORMULARIO TRABAJADOR
 ========================================================= */
 
-function workerForm(w={}){
+function workerForm(w = {}) {
 
   openModal(`
 
 <h3 class="modal-title">
 
 ${w.id
-  ?"Editar trabajador"
-  :"Nuevo trabajador"}
+  ? "Editar trabajador"
+  : "Nuevo trabajador"}
 
 </h3>
 
@@ -1143,13 +1394,13 @@ Estado
 <select name="status">
 
 <option
-${w.status==="Activo"?"selected":""}
+${w.status === "Activo" ? "selected" : ""}
 >
 Activo
 </option>
 
 <option
-${w.status==="Inactivo"?"selected":""}
+${w.status === "Inactivo" ? "selected" : ""}
 >
 Inactivo
 </option>
@@ -1184,29 +1435,29 @@ Guardar trabajador
 
 `);
 
-  $("#workerForm").onsubmit=
-    async e=>{
+  $("#workerForm").onsubmit =
+    async e => {
 
       e.preventDefault();
 
-      const o=
+      const o =
         Object.fromEntries(
           new FormData(
             e.target
           )
         );
 
-      try{
+      try {
 
         await api(
           w.id
-            ?"/workers/"+w.id
-            :"/workers",
+            ? "/workers/" + w.id
+            : "/workers",
           {
             method:
               w.id
-                ?"PUT"
-                :"POST",
+                ? "PUT"
+                : "POST",
 
             body:
               JSON.stringify(o)
@@ -1223,7 +1474,7 @@ Guardar trabajador
 
         loadDashboard();
 
-      }catch(x){
+      } catch (x) {
 
         toast(
           x.message
@@ -1237,11 +1488,11 @@ Guardar trabajador
    HISTORIAL TRABAJADOR
 ========================================================= */
 
-async function workerHistory(id){
+async function workerHistory(id) {
 
-  const d=
+  const d =
     await api(
-      "/workers/"+id+"/history"
+      "/workers/" + id + "/history"
     );
 
   openModal(`
@@ -1299,7 +1550,7 @@ font-size:12px
 >
 
 ${esc(
-  d.worker.position||""
+  d.worker.position || ""
 )}
 
 </p>
@@ -1345,7 +1596,7 @@ ${d.attendance.length}
 
 <b>
 ${esc(
-  d.worker.area||"-"
+  d.worker.area || "-"
 )}
 </b>
 
@@ -1366,10 +1617,10 @@ style="margin-top:12px"
 ${
 d.permissions.length
 
-?d.permissions
-  .slice(0,8)
+? d.permissions
+  .slice(0, 8)
   .map(
-    p=>`
+    p => `
 
 <div class="kpi-line">
 
@@ -1406,14 +1657,14 @@ Sin registros.
    PERMISOS
 ========================================================= */
 
-async function loadPermissions(){
+async function loadPermissions() {
 
-  const rows=
+  const rows =
     await api(
       "/permissions"
     );
 
-  $("#content").innerHTML=
+  $("#content").innerHTML =
     layout(
       "Permisos y salidas",
       "Solicitudes, autorizaciones y control de salidas",
@@ -1578,12 +1829,12 @@ ${permissionRows(rows)}
    FILAS DE PERMISOS
 ========================================================= */
 
-function permissionRows(rows){
+function permissionRows(rows) {
 
   return rows.length
 
-  ?rows.map(
-    p=>`
+  ? rows.map(
+    p => `
 
 <tr>
 
@@ -1616,17 +1867,17 @@ ${esc(p.type)}
 
 
 <td>
-${esc(p.exit_time||"-")}
+${esc(p.exit_time || "-")}
 </td>
 
 
 <td>
-${esc(p.return_time||"-")}
+${esc(p.return_time || "-")}
 </td>
 
 
 <td>
-${esc(p.reason||"-")}
+${esc(p.reason || "-")}
 </td>
 
 
@@ -1638,7 +1889,7 @@ ${badge(p.status)}
 <td>
 
 ${
-p.status==="Pendiente"
+p.status === "Pendiente"
 
 ?`
 
@@ -1655,7 +1906,7 @@ Revisar
 
 <button
 class="secondary"
-onclick="permissionDetail(${JSON.stringify(p).replace(/"/g,"&quot;")})"
+onclick="permissionDetail(${JSON.stringify(p).replace(/"/g, "&quot;")})"
 >
 Ver
 </button>
@@ -1701,24 +1952,24 @@ No hay permisos registrados.
    ELIMINAR PERMISO
 ========================================================= */
 
-async function deletePermission(id){
+async function deletePermission(id) {
 
-  const confirmar=
+  const confirmar =
     confirm(
-      "¿Estás seguro de que deseas eliminar este registro de permiso?\n\n"+
+      "¿Estás seguro de que deseas eliminar este registro de permiso?\n\n" +
       "Esta acción eliminará el registro definitivamente."
     );
 
-  if(!confirmar){
+  if (!confirmar) {
     return;
   }
 
-  try{
+  try {
 
     await api(
-      "/permissions/"+id,
+      "/permissions/" + id,
       {
-        method:"DELETE"
+        method: "DELETE"
       }
     );
 
@@ -1730,7 +1981,7 @@ async function deletePermission(id){
 
     await loadNotifications();
 
-  }catch(e){
+  } catch (e) {
 
     toast(
       e.message ||
@@ -1744,24 +1995,24 @@ async function deletePermission(id){
    FILTRAR PERMISOS
 ========================================================= */
 
-async function filterPermissions(){
+async function filterPermissions() {
 
-  let u=
-    "/permissions?search="+
+  let u =
+    "/permissions?search=" +
     encodeURIComponent(
       $("#psearch").value
-    )+
-    "&status="+
+    ) +
+    "&status=" +
     encodeURIComponent(
       $("#pstatus").value
-    )+
-    "&type="+
+    ) +
+    "&type=" +
     encodeURIComponent(
       $("#ptype").value
     );
 
   $("#permissionRows")
-    .innerHTML=
+    .innerHTML =
       permissionRows(
         await api(u)
       );
@@ -1772,17 +2023,17 @@ async function filterPermissions(){
    FORMULARIO PERMISO
 ========================================================= */
 
-async function permissionForm(){
+async function permissionForm() {
 
-  const ws=
+  const ws =
     await api(
       "/workers"
     );
 
-  const active=
+  const active =
     ws.filter(
       w =>
-        w.status==="Activo"
+        w.status === "Activo"
     );
 
   openModal(`
@@ -1813,7 +2064,7 @@ Seleccionar trabajador
 </option>
 
 ${active.map(
-w=>`
+w => `
 
 <option value="${w.id}">
 
@@ -1855,7 +2106,7 @@ ${
 "Tardanza",
 "Otro"
 ].map(
-x=>
+x =>
 `<option>${x}</option>`
 ).join("")
 }
@@ -1981,18 +2232,18 @@ Registrar
 
 `);
 
-  $("#permissionForm").onsubmit=
-    async e=>{
+  $("#permissionForm").onsubmit =
+    async e => {
 
       e.preventDefault();
 
-      try{
+      try {
 
         await api(
           "/permissions",
           {
-            method:"POST",
-            body:JSON.stringify(
+            method: "POST",
+            body: JSON.stringify(
               Object.fromEntries(
                 new FormData(
                   e.target
@@ -2010,7 +2261,7 @@ Registrar
 
         loadPermissions();
 
-      }catch(x){
+      } catch (x) {
 
         toast(
           x.message
@@ -2024,33 +2275,33 @@ Registrar
    NOTIFICACIONES
 ========================================================= */
 
-async function loadNotifications(){
+async function loadNotifications() {
 
-  try{
+  try {
 
-    const d=
+    const d =
       await api(
         "/notifications"
       );
 
-    const b=
+    const b =
       $("#pendingCount");
 
-    b.textContent=
+    b.textContent =
       d.pending;
 
     b.classList.toggle(
       "zero",
-      d.pending===0
+      d.pending === 0
     );
 
-  }catch(e){}
+  } catch (e) {}
 }
 
 
-async function showNotifications(){
+async function showNotifications() {
 
-  const d=
+  const d =
     await api(
       "/notifications"
     );
@@ -2065,8 +2316,8 @@ async function showNotifications(){
 ${
 d.latest.length
 
-?d.latest.map(
-x=>`
+? d.latest.map(
+x => `
 
 <div
 class="notification-row"
@@ -2135,21 +2386,21 @@ Ver todos los permisos
    REVISAR PERMISO
 ========================================================= */
 
-async function reviewPermission(id){
+async function reviewPermission(id) {
 
-  const rows=
+  const rows =
     await api(
       "/permissions"
     );
 
-  const p=
+  const p =
     rows.find(
       x =>
         Number(x.id) ===
         Number(id)
     );
 
-  if(!p){
+  if (!p) {
 
     return toast(
       "No se encontró la solicitud"
@@ -2180,9 +2431,9 @@ ${esc(p.names)}
 <small>
 ${esc(p.dni)}
 ·
-${esc(p.position||"")}
+${esc(p.position || "")}
 ·
-${esc(p.area||"")}
+${esc(p.area || "")}
 </small>
 
 </div>
@@ -2232,9 +2483,9 @@ Horario
 </small>
 
 <b>
-${esc(p.exit_time||"-")}
+${esc(p.exit_time || "-")}
 -
-${esc(p.return_time||"-")}
+${esc(p.return_time || "-")}
 </b>
 
 </div>
@@ -2250,7 +2501,7 @@ Motivo
 
 <p>
 ${esc(
-  p.reason||
+  p.reason ||
   "No especificado"
 )}
 </p>
@@ -2266,7 +2517,7 @@ Observación
 
 <p>
 ${esc(
-  p.observation||
+  p.observation ||
   "Sin observaciones"
 )}
 </p>
@@ -2280,18 +2531,13 @@ ${esc(
 Documento sustentatorio
 </b>
 
-<p>
-${esc(
-  p.document||
-  "No adjuntado"
-)}
-</p>
+${documentInfo(p)}
 
 </div>
 
 
 ${
-p.status==="Pendiente"
+p.status === "Pendiente"
 
 ?`
 
@@ -2350,7 +2596,7 @@ Decisión
 
 <p>
 ${esc(
-  p.decision_reason||
+  p.decision_reason ||
   "Sin comentario"
 )}
 </p>
@@ -2383,16 +2629,16 @@ Cerrar
 async function decidePermission(
   id,
   status
-){
+) {
 
-  const reason=
-    $("#decisionReason")?.value||
+  const reason =
+    $("#decisionReason")?.value ||
     "";
 
-  if(
-    status==="Rechazado" &&
+  if (
+    status === "Rechazado" &&
     !reason.trim()
-  ){
+  ) {
 
     toast(
       "Escribe el motivo del rechazo"
@@ -2401,24 +2647,24 @@ async function decidePermission(
     return;
   }
 
-  if(
+  if (
     !confirm(
-      status==="Aprobado"
-        ?"¿Confirmas que deseas APROBAR esta solicitud?"
-        :"¿Confirmas que deseas RECHAZAR esta solicitud?"
+      status === "Aprobado"
+        ? "¿Confirmas que deseas APROBAR esta solicitud?"
+        : "¿Confirmas que deseas RECHAZAR esta solicitud?"
     )
-  ){
+  ) {
 
     return;
   }
 
-  try{
+  try {
 
     await api(
-      "/permissions/"+id+"/status",
+      "/permissions/" + id + "/status",
       {
-        method:"PUT",
-        body:JSON.stringify({
+        method: "PUT",
+        body: JSON.stringify({
           status,
           reason
         })
@@ -2428,16 +2674,16 @@ async function decidePermission(
     closeModal();
 
     toast(
-      status==="Aprobado"
-        ?"Permiso aprobado correctamente"
-        :"Permiso rechazado"
+      status === "Aprobado"
+        ? "Permiso aprobado correctamente"
+        : "Permiso rechazado"
     );
 
     loadNotifications();
 
     loadPermissions();
 
-  }catch(e){
+  } catch (e) {
 
     toast(
       e.message
@@ -2449,24 +2695,24 @@ async function decidePermission(
 async function setPermission(
   id,
   status
-){
+) {
 
-  if(
+  if (
     !confirm(
       `¿Deseas marcar este permiso como ${status}?`
     )
-  ){
+  ) {
 
     return;
   }
 
-  try{
+  try {
 
     await api(
-      "/permissions/"+id+"/status",
+      "/permissions/" + id + "/status",
       {
-        method:"PUT",
-        body:JSON.stringify({
+        method: "PUT",
+        body: JSON.stringify({
           status
         })
       }
@@ -2478,7 +2724,7 @@ async function setPermission(
 
     loadPermissions();
 
-  }catch(e){
+  } catch (e) {
 
     toast(
       e.message
@@ -2491,7 +2737,7 @@ async function setPermission(
    DETALLE PERMISO
 ========================================================= */
 
-function permissionDetail(p){
+function permissionDetail(p) {
 
   openModal(`
 
@@ -2560,7 +2806,7 @@ Salida
 </small>
 
 <b>
-${esc(p.exit_time||"-")}
+${esc(p.exit_time || "-")}
 </b>
 
 </div>
@@ -2573,7 +2819,7 @@ Retorno
 </small>
 
 <b>
-${esc(p.return_time||"-")}
+${esc(p.return_time || "-")}
 </b>
 
 </div>
@@ -2594,7 +2840,7 @@ Motivo
 </span>
 
 <b>
-${esc(p.reason||"-")}
+${esc(p.reason || "-")}
 </b>
 
 </div>
@@ -2607,7 +2853,7 @@ Observación
 </span>
 
 <b>
-${esc(p.observation||"-")}
+${esc(p.observation || "-")}
 </b>
 
 </div>
@@ -2620,7 +2866,7 @@ Autorizó
 </span>
 
 <b>
-${esc(p.approved_by||"-")}
+${esc(p.approved_by || "-")}
 </b>
 
 </div>
@@ -2633,10 +2879,24 @@ Comentario de decisión
 </span>
 
 <b>
-${esc(p.decision_reason||"-")}
+${esc(p.decision_reason || "-")}
 </b>
 
 </div>
+
+</div>
+
+
+<div
+class="card"
+style="margin-top:15px"
+>
+
+<h4>
+Documento sustentatorio
+</h4>
+
+${documentInfo(p)}
 
 </div>
 
@@ -2648,14 +2908,14 @@ ${esc(p.decision_reason||"-")}
    ASISTENCIA
 ========================================================= */
 
-async function loadAttendance(){
+async function loadAttendance() {
 
-  const rows=
+  const rows =
     await api(
-      "/attendance?date="+today
+      "/attendance?date=" + today
     );
 
-  $("#content").innerHTML=
+  $("#content").innerHTML =
     layout(
       "Asistencia",
       "Control diario de entradas, salidas y tardanzas",
@@ -2738,12 +2998,12 @@ ${attendanceRows(rows)}
 }
 
 
-function attendanceRows(rows){
+function attendanceRows(rows) {
 
   return rows.length
 
-  ?rows.map(
-    a=>`
+  ? rows.map(
+    a => `
 
 <tr>
 
@@ -2759,7 +3019,7 @@ display:block;
 color:#8993a2
 "
 >
-${esc(a.area||"")}
+${esc(a.area || "")}
 </small>
 
 </td>
@@ -2771,12 +3031,12 @@ ${esc(a.date)}
 
 
 <td>
-${esc(a.entry_time||"-")}
+${esc(a.entry_time || "-")}
 </td>
 
 
 <td>
-${esc(a.exit_time||"-")}
+${esc(a.exit_time || "-")}
 </td>
 
 
@@ -2786,12 +3046,12 @@ ${badge(a.status)}
 
 
 <td>
-${a.late_minutes||0} min
+${a.late_minutes || 0} min
 </td>
 
 
 <td>
-${esc(a.observation||"-")}
+${esc(a.observation || "-")}
 </td>
 
 </tr>
@@ -2817,16 +3077,16 @@ No hay registros para esta fecha.
 }
 
 
-async function refreshAttendance(){
+async function refreshAttendance() {
 
-  const r=
+  const r =
     await api(
-      "/attendance?date="+
+      "/attendance?date=" +
       $("#adate").value
     );
 
   $("#attendanceRows")
-    .innerHTML=
+    .innerHTML =
       attendanceRows(r);
 }
 
@@ -2835,9 +3095,9 @@ async function refreshAttendance(){
    FORMULARIO ASISTENCIA
 ========================================================= */
 
-async function attendanceForm(){
+async function attendanceForm() {
 
-  const ws=
+  const ws =
     await api(
       "/workers"
     );
@@ -2869,10 +3129,10 @@ ${
 ws
 .filter(
   w =>
-    w.status==="Activo"
+    w.status === "Activo"
 )
 .map(
-  w=>`
+  w => `
 
 <option
 value="${w.id}"
@@ -3024,18 +3284,18 @@ Guardar
 
 `);
 
-  $("#attendanceForm").onsubmit=
-    async e=>{
+  $("#attendanceForm").onsubmit =
+    async e => {
 
       e.preventDefault();
 
-      try{
+      try {
 
         await api(
           "/attendance",
           {
-            method:"POST",
-            body:JSON.stringify(
+            method: "POST",
+            body: JSON.stringify(
               Object.fromEntries(
                 new FormData(
                   e.target
@@ -3053,7 +3313,7 @@ Guardar
 
         loadAttendance();
 
-      }catch(x){
+      } catch (x) {
 
         toast(
           x.message
@@ -3067,13 +3327,13 @@ Guardar
    REPORTES
 ========================================================= */
 
-function loadReports(){
+function loadReports() {
 
   $("#pageTitle")
-    .textContent=
+    .textContent =
     "Reportes";
 
-  $("#content").innerHTML=
+  $("#content").innerHTML =
 
     layout(
       "Reportes",
@@ -3194,27 +3454,27 @@ Dashboard
    DESCARGAR REPORTES
 ========================================================= */
 
-async function downloadReport(type){
+async function downloadReport(type) {
 
-  const b=
+  const b =
     await api(
-      "/reports/"+type
+      "/reports/" + type
     );
 
-  const url=
+  const url =
     URL.createObjectURL(b);
 
-  const a=
+  const a =
     document.createElement(
       "a"
     );
 
-  a.href=url;
+  a.href = url;
 
-  a.download=
-    type==="pdf"
-      ?"Reporte_Permisos.pdf"
-      :"Reporte_Permisos.xlsx";
+  a.download =
+    type === "pdf"
+      ? "Reporte_Permisos.pdf"
+      : "Reporte_Permisos.xlsx";
 
   a.click();
 
