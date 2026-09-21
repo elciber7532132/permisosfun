@@ -1,4 +1,3 @@
-
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
@@ -201,14 +200,14 @@ function logout() {
 ========================================================= */
 
 function documentInfo(p) {
-  const data = p.document || "";
+  const data = p?.document || "";
 
   const name =
-    p.document_name ||
+    p?.document_name ||
     "Documento sustentatorio";
 
   const type =
-    p.document_type || "";
+    p?.document_type || "";
 
   if (!data) {
     return `
@@ -220,15 +219,34 @@ function documentInfo(p) {
 
   const id =
     "documentViewer_" +
-    Date.now() +
+    String(p?.id || Date.now()) +
     "_" +
     Math.random()
       .toString(36)
       .slice(2);
 
+  /* Guardamos el documento en memoria */
+  if (!window.__documents) {
+    window.__documents = {};
+  }
+
+  window.__documents[id] = {
+    data: data,
+    name: name,
+    type: type
+  };
+
+  const esImagen =
+    type === "image/jpeg" ||
+    type === "image/png" ||
+    type.startsWith("image/");
+
+  const esPDF =
+    type === "application/pdf";
+
   return `
     <div
-      id="${id}"
+      id="${esc(id)}"
       style="
         padding:14px;
         border:1px solid #e2e8f0;
@@ -247,7 +265,7 @@ function documentInfo(p) {
       >
 
         <span style="font-size:25px;">
-          ${type.startsWith("image/") ? "🖼️" : "📎"}
+          ${esImagen ? "🖼️" : esPDF ? "📄" : "📎"}
         </span>
 
         <div>
@@ -271,24 +289,34 @@ function documentInfo(p) {
       </div>
 
       ${
-        type.startsWith("image/")
+        esImagen
           ? `
-            <img
-              src="${data}"
-              alt="${esc(name)}"
+            <div
               style="
-                max-width:100%;
-                max-height:450px;
-                display:block;
-                margin:0 auto 15px;
-                border-radius:8px;
+                padding:10px;
+                background:#fff;
                 border:1px solid #e2e8f0;
-                object-fit:contain;
-                background:white;
+                border-radius:8px;
+                margin-bottom:15px;
+                text-align:center;
               "
             >
+              <div
+                id="${esc(id)}_preview"
+                style="
+                  min-height:80px;
+                  display:flex;
+                  align-items:center;
+                  justify-content:center;
+                "
+              >
+                <span style="color:#718096;">
+                  Cargando imagen...
+                </span>
+              </div>
+            </div>
           `
-          : type === "application/pdf"
+          : esPDF
           ? `
             <div
               style="
@@ -300,6 +328,7 @@ function documentInfo(p) {
                 margin-bottom:15px;
               "
             >
+
               <div style="font-size:45px;">
                 📄
               </div>
@@ -317,6 +346,7 @@ function documentInfo(p) {
               >
                 Haz clic en "Ver documento" para abrirlo.
               </p>
+
             </div>
           `
           : ""
@@ -333,9 +363,10 @@ function documentInfo(p) {
         <button
           type="button"
           class="secondary"
-          id="${id}_open"
+          id="${esc(id)}_open"
           style="
             padding:9px 13px;
+            cursor:pointer;
           "
         >
           👁️ Ver documento
@@ -344,9 +375,10 @@ function documentInfo(p) {
         <button
           type="button"
           class="primary"
-          id="${id}_download"
+          id="${esc(id)}_download"
           style="
             padding:9px 13px;
+            cursor:pointer;
           "
         >
           📥 Descargar
@@ -356,204 +388,240 @@ function documentInfo(p) {
 
     </div>
   `;
-
-  setTimeout(() => {
-
-    const openButton =
-      document.getElementById(
-        id + "_open"
-      );
-
-    const downloadButton =
-      document.getElementById(
-        id + "_download"
-      );
-
-    if (openButton) {
-
-      openButton.onclick = () => {
-
-        try {
-
-          const nuevaVentana =
-            window.open(
-              "",
-              "_blank"
-            );
-
-          if (!nuevaVentana) {
-
-            toast(
-              "El navegador bloqueó la nueva pestaña. Permite ventanas emergentes."
-            );
-
-            return;
-          }
-
-          /*
-             IMÁGENES
-          */
-
-          if (
-            type === "image/jpeg" ||
-            type === "image/png"
-          ) {
-
-            nuevaVentana.document.write(`
-              <!DOCTYPE html>
-
-              <html>
-
-              <head>
-
-                <title>
-                  ${esc(name)}
-                </title>
-
-                <meta
-                  charset="UTF-8"
-                >
-
-                <style>
-
-                  html,
-                  body {
-
-                    margin:0;
-
-                    padding:0;
-
-                    width:100%;
-
-                    min-height:100%;
-
-                    background:#111827;
-
-                  }
-
-                  body {
-
-                    display:flex;
-
-                    align-items:center;
-
-                    justify-content:center;
-
-                  }
-
-                  img {
-
-                    max-width:95vw;
-
-                    max-height:95vh;
-
-                    object-fit:contain;
-
-                  }
-
-                </style>
-
-              </head>
-
-              <body>
-
-                <img
-                  src="${data}"
-                  alt="${esc(name)}"
-                >
-
-              </body>
-
-              </html>
-            `);
-
-            nuevaVentana.document.close();
-
-            return;
-          }
-
-          /*
-             PDF
-          */
-
-          if (
-            type ===
-            "application/pdf"
-          ) {
-
-            nuevaVentana.location.href =
-              data;
-
-            return;
-          }
-
-          /*
-             OTROS TIPOS
-          */
-
-          nuevaVentana.location.href =
-            data;
-
-        } catch (error) {
-
-          console.error(
-            "ERROR AL ABRIR DOCUMENTO:",
-            error
-          );
-
-          toast(
-            "No se pudo abrir el documento"
-          );
-
-        }
-
-      };
-    }
-
-    if (downloadButton) {
-
-      downloadButton.onclick = () => {
-
-        try {
-
-          const a =
-            document.createElement(
-              "a"
-            );
-
-          a.href = data;
-
-          a.download =
-            name ||
-            "documento";
-
-          document.body.appendChild(
-            a
-          );
-
-          a.click();
-
-          a.remove();
-
-        } catch (error) {
-
-          console.error(
-            "ERROR AL DESCARGAR DOCUMENTO:",
-            error
-          );
-
-          toast(
-            "No se pudo descargar el documento"
-          );
-
-        }
-
-      };
-
-    }
-
-  }, 0);
 }
+
+/* =========================================================
+   ABRIR DOCUMENTO
+========================================================= */
+
+function openDocument(id) {
+  const doc =
+    window.__documents?.[id];
+
+  if (!doc || !doc.data) {
+    toast("No se encontró el documento.");
+    return;
+  }
+
+  try {
+
+    const nuevaVentana =
+      window.open("", "_blank");
+
+    if (!nuevaVentana) {
+      toast(
+        "El navegador bloqueó la nueva pestaña. Permite ventanas emergentes."
+      );
+      return;
+    }
+
+    /*
+      IMÁGENES
+    */
+
+    if (
+      doc.type &&
+      doc.type.startsWith("image/")
+    ) {
+
+      nuevaVentana.document.title =
+        doc.name || "Documento";
+
+      nuevaVentana.document.body.style.margin =
+        "0";
+
+      nuevaVentana.document.body.style.padding =
+        "20px";
+
+      nuevaVentana.document.body.style.background =
+        "#111827";
+
+      nuevaVentana.document.body.style.display =
+        "flex";
+
+      nuevaVentana.document.body.style.alignItems =
+        "center";
+
+      nuevaVentana.document.body.style.justifyContent =
+        "center";
+
+      nuevaVentana.document.body.style.minHeight =
+        "100vh";
+
+      nuevaVentana.document.body.style.boxSizing =
+        "border-box";
+
+      const img =
+        nuevaVentana.document.createElement(
+          "img"
+        );
+
+      img.src = doc.data;
+
+      img.alt =
+        doc.name || "Documento";
+
+      img.style.maxWidth =
+        "95vw";
+
+      img.style.maxHeight =
+        "95vh";
+
+      img.style.objectFit =
+        "contain";
+
+      img.style.borderRadius =
+        "8px";
+
+      nuevaVentana.document.body.appendChild(
+        img
+      );
+
+      return;
+    }
+
+    /*
+      PDF
+    */
+
+    if (
+      doc.type ===
+      "application/pdf"
+    ) {
+
+      nuevaVentana.location.href =
+        doc.data;
+
+      return;
+    }
+
+    /*
+      OTROS ARCHIVOS
+    */
+
+    nuevaVentana.location.href =
+      doc.data;
+
+  } catch (error) {
+
+    console.error(
+      "ERROR AL ABRIR DOCUMENTO:",
+      error
+    );
+
+    toast(
+      "No se pudo abrir el documento."
+    );
+  }
+}
+
+/* =========================================================
+   DESCARGAR DOCUMENTO
+========================================================= */
+
+function downloadDocument(id) {
+  const doc =
+    window.__documents?.[id];
+
+  if (!doc || !doc.data) {
+    toast("No se encontró el documento.");
+    return;
+  }
+
+  try {
+
+    const a =
+      document.createElement("a");
+
+    a.href =
+      doc.data;
+
+    a.download =
+      doc.name ||
+      "documento";
+
+    a.style.display =
+      "none";
+
+    document.body.appendChild(a);
+
+    a.click();
+
+    a.remove();
+
+    toast(
+      "Descarga iniciada."
+    );
+
+  } catch (error) {
+
+    console.error(
+      "ERROR AL DESCARGAR DOCUMENTO:",
+      error
+    );
+
+    toast(
+      "No se pudo descargar el documento."
+    );
+  }
+}
+
+/* =========================================================
+   EVENTOS DE DOCUMENTOS
+========================================================= */
+
+document.addEventListener(
+  "click",
+  function(e) {
+
+    const btnVer =
+      e.target.closest(
+        "[id$='_open']"
+      );
+
+    if (
+      btnVer &&
+      btnVer.id.startsWith(
+        "documentViewer_"
+      )
+    ) {
+
+      const id =
+        btnVer.id.replace(
+          "_open",
+          ""
+        );
+
+      openDocument(id);
+
+      return;
+    }
+
+    const btnDescargar =
+      e.target.closest(
+        "[id$='_download']"
+      );
+
+    if (
+      btnDescargar &&
+      btnDescargar.id.startsWith(
+        "documentViewer_"
+      )
+    ) {
+
+      const id =
+        btnDescargar.id.replace(
+          "_download",
+          ""
+        );
+
+      downloadDocument(id);
+
+      return;
+    }
+
+  }
+);
 
 /* =========================================================
    LOGIN
@@ -1090,6 +1158,7 @@ Trabajadores con más registros de permisos
 ${
   ranking.length
     ?
+
 `
 
 <div
@@ -3353,6 +3422,110 @@ Cerrar
 
 `);
 
+    /*
+      Cargar vista previa de imagen
+      DESPUÉS de insertar el modal.
+    */
+
+    if (
+      p.document &&
+      p.document_type &&
+      p.document_type.startsWith("image/")
+    ) {
+
+      setTimeout(() => {
+
+        const documentos =
+          window.__documents || {};
+
+        const ids =
+          Object.keys(
+            documentos
+          );
+
+        const id =
+          ids[ids.length - 1];
+
+        const doc =
+          documentos[id];
+
+        const preview =
+          document.getElementById(
+            id + "_preview"
+          );
+
+        if (
+          preview &&
+          doc?.data
+        ) {
+
+          const img =
+            document.createElement(
+              "img"
+            );
+
+          img.src =
+            doc.data;
+
+          img.alt =
+            doc.name ||
+            "Documento";
+
+          img.style.maxWidth =
+            "100%";
+
+          img.style.maxHeight =
+            "450px";
+
+          img.style.display =
+            "block";
+
+          img.style.margin =
+            "0 auto";
+
+          img.style.borderRadius =
+            "8px";
+
+          img.style.objectFit =
+            "contain";
+
+          img.style.background =
+            "#fff";
+
+          img.onload = () => {
+
+            preview.innerHTML =
+              "";
+
+            preview.appendChild(
+              img
+            );
+
+          };
+
+          img.onerror = () => {
+
+            preview.innerHTML = `
+
+              <span
+                style="
+                  color:#c53030;
+                  font-size:13px;
+                "
+              >
+                No se pudo cargar la vista previa.
+              </span>
+
+            `;
+
+          };
+
+        }
+
+      }, 50);
+
+    }
+
   } catch (e) {
 
     toast(
@@ -3704,6 +3877,106 @@ ${documentInfo(p)}
 </div>
 
 `);
+
+  /*
+    Vista previa de imagen para el detalle
+  */
+
+  if (
+    p.document &&
+    p.document_type &&
+    p.document_type.startsWith("image/")
+  ) {
+
+    setTimeout(() => {
+
+      const documentos =
+        window.__documents || {};
+
+      const ids =
+        Object.keys(
+          documentos
+        );
+
+      const id =
+        ids[ids.length - 1];
+
+      const doc =
+        documentos[id];
+
+      const preview =
+        document.getElementById(
+          id + "_preview"
+        );
+
+      if (
+        preview &&
+        doc?.data
+      ) {
+
+        const img =
+          document.createElement(
+            "img"
+          );
+
+        img.src =
+          doc.data;
+
+        img.alt =
+          doc.name ||
+          "Documento";
+
+        img.style.maxWidth =
+          "100%";
+
+        img.style.maxHeight =
+          "450px";
+
+        img.style.display =
+          "block";
+
+        img.style.margin =
+          "0 auto";
+
+        img.style.borderRadius =
+          "8px";
+
+        img.style.objectFit =
+          "contain";
+
+        img.onload = () => {
+
+          preview.innerHTML =
+            "";
+
+          preview.appendChild(
+            img
+          );
+
+        };
+
+        img.onerror = () => {
+
+          preview.innerHTML = `
+
+            <span
+              style="
+                color:#c53030;
+                font-size:13px;
+              "
+            >
+              No se pudo cargar la vista previa.
+            </span>
+
+          `;
+
+        };
+
+      }
+
+    }, 50);
+
+  }
 
 }
 
@@ -4412,4 +4685,3 @@ async function downloadReport(type) {
   }
 
 }
-
