@@ -1,9 +1,15 @@
+```javascript
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
 const API = window.API_BASE || '/api';
 
 let token = localStorage.getItem("token") || "";
+
+
+/* =========================================================
+   UTILIDADES
+========================================================= */
 
 const esc = s => String(s ?? "").replace(
   /[&<>"']/g,
@@ -19,153 +25,48 @@ const esc = s => String(s ?? "").replace(
 const today = new Date().toISOString().slice(0, 10);
 
 
-/* =========================================================
-   PANTALLAS
-========================================================= */
-
-function showLogin() {
-  $("#landing").classList.add("hidden");
-  $("#login").classList.remove("hidden");
-  $("#app").classList.add("hidden");
-
-  setTimeout(() => $("#user").focus(), 50);
-}
-
-function showLanding() {
-  $("#landing").classList.remove("hidden");
-  $("#login").classList.add("hidden");
-  $("#app").classList.add("hidden");
-}
-
-function showApp() {
-  $("#landing").classList.add("hidden");
-  $("#login").classList.add("hidden");
-  $("#app").classList.remove("hidden");
-}
-
-
-/* =========================================================
-   API
-========================================================= */
-
-function headers(json = true) {
-  const h = {
-    Authorization: "Bearer " + token
-  };
-
-  if (json) {
-    h["Content-Type"] = "application/json";
-  }
-
-  return h;
-}
-
-async function api(url, opt = {}) {
-
-  const r = await fetch(
-    API + url,
-    {
-      ...opt,
-      headers: {
-        ...headers(
-          opt.body !== undefined
-        ),
-        ...(opt.headers || {})
-      }
-    }
-  );
-
-  if (r.status === 401) {
-    logout();
-
-    throw Error("Sesión expirada");
-  }
-
-  const t =
-    r.headers.get("content-type") || "";
-
-  const d =
-    t.includes("json")
-      ? await r.json()
-      : await r.blob();
-
-  if (!r.ok) {
-    throw Error(
-      d.error ||
-      "Error"
-    );
-  }
-
-  return d;
-}
-
-
-/* =========================================================
-   UTILIDADES
-========================================================= */
-
 function toast(s) {
 
   const e = $("#toast");
 
+  if (!e) return;
+
   e.textContent = s;
 
-  e.classList.add(
-    "toast-show"
-  );
+  e.classList.add("toast-show");
 
   setTimeout(
-    () => e.classList.remove(
-      "toast-show"
-    ),
+    () => e.classList.remove("toast-show"),
     2500
   );
 }
 
+
 function openModal(html) {
 
-  $("#modalContent")
-    .innerHTML = html;
+  $("#modalContent").innerHTML = html;
 
-  $("#modal")
-    .classList.remove(
-      "hidden"
-    );
+  $("#modal").classList.remove("hidden");
 }
+
 
 function closeModal() {
 
-  $("#modal")
-    .classList.add(
-      "hidden"
-    );
+  $("#modal").classList.add("hidden");
 }
 
-function logout() {
-
-  localStorage.removeItem(
-    "token"
-  );
-
-  token = "";
-
-  $("#app")
-    .classList.add(
-      "hidden"
-    );
-
-  showLanding();
-}
 
 function initials(n) {
 
   return String(n || "")
     .split(" ")
+    .filter(Boolean)
     .slice(0, 2)
     .map(x => x[0])
     .join("")
     .toUpperCase();
 }
+
 
 function badge(s) {
 
@@ -184,9 +85,127 @@ function badge(s) {
 
   return `
     <span class="badge ${c}">
-      ${esc(s)}
+      ${esc(s || "-")}
     </span>
   `;
+}
+
+
+/* =========================================================
+   PANTALLAS
+========================================================= */
+
+function showLogin() {
+
+  $("#landing").classList.add("hidden");
+  $("#login").classList.remove("hidden");
+  $("#app").classList.add("hidden");
+
+  setTimeout(
+    () => $("#user").focus(),
+    50
+  );
+}
+
+
+function showLanding() {
+
+  $("#landing").classList.remove("hidden");
+  $("#login").classList.add("hidden");
+  $("#app").classList.add("hidden");
+}
+
+
+function showApp() {
+
+  $("#landing").classList.add("hidden");
+  $("#login").classList.add("hidden");
+  $("#app").classList.remove("hidden");
+}
+
+
+/* =========================================================
+   API
+========================================================= */
+
+function headers(json = true) {
+
+  const h = {
+    Authorization: "Bearer " + token
+  };
+
+  if (json) {
+    h["Content-Type"] = "application/json";
+  }
+
+  return h;
+}
+
+
+async function api(url, opt = {}) {
+
+  const r = await fetch(
+    API + url,
+    {
+      ...opt,
+
+      headers: {
+        ...headers(
+          opt.body !== undefined
+        ),
+
+        ...(opt.headers || {})
+      }
+    }
+  );
+
+
+  if (r.status === 401) {
+
+    logout();
+
+    throw Error(
+      "Sesión expirada"
+    );
+  }
+
+
+  const t =
+    r.headers.get("content-type") || "";
+
+
+  const d =
+    t.includes("json")
+      ? await r.json()
+      : await r.blob();
+
+
+  if (!r.ok) {
+
+    throw Error(
+      d?.error ||
+      "Error"
+    );
+  }
+
+
+  return d;
+}
+
+
+/* =========================================================
+   LOGOUT
+========================================================= */
+
+function logout() {
+
+  localStorage.removeItem("token");
+
+  token = "";
+
+  $("#app").classList.add("hidden");
+
+  showLanding();
 }
 
 
@@ -196,7 +215,8 @@ function badge(s) {
 
 function documentInfo(p) {
 
-  const data = p.document || "";
+  const data =
+    p.document || "";
 
   const name =
     p.document_name ||
@@ -204,6 +224,7 @@ function documentInfo(p) {
 
   const type =
     p.document_type || "";
+
 
   if (!data) {
 
@@ -214,7 +235,9 @@ function documentInfo(p) {
     `;
   }
 
+
   let html = `
+
     <div
       style="
         padding:14px;
@@ -238,7 +261,10 @@ function documentInfo(p) {
         </span>
 
         <div>
-          <b>${esc(name)}</b>
+
+          <b>
+            ${esc(name)}
+          </b>
 
           ${
             type
@@ -259,6 +285,7 @@ function documentInfo(p) {
         </div>
 
       </div>
+
 
       <div
         style="
@@ -282,6 +309,7 @@ function documentInfo(p) {
           👁️ Ver documento
         </a>
 
+
         <a
           href="${esc(data)}"
           download="${esc(name)}"
@@ -300,11 +328,13 @@ function documentInfo(p) {
     </div>
   `;
 
+
   if (
     type.startsWith("image/")
   ) {
 
     html = `
+
       <div
         style="
           padding:14px;
@@ -328,7 +358,10 @@ function documentInfo(p) {
           </span>
 
           <div>
-            <b>${esc(name)}</b>
+
+            <b>
+              ${esc(name)}
+            </b>
 
             <small
               style="
@@ -339,9 +372,11 @@ function documentInfo(p) {
             >
               Imagen adjunta
             </small>
+
           </div>
 
         </div>
+
 
         <img
           src="${esc(data)}"
@@ -357,6 +392,7 @@ function documentInfo(p) {
             background:white;
           "
         >
+
 
         <div
           style="
@@ -380,6 +416,7 @@ function documentInfo(p) {
             👁️ Abrir imagen
           </a>
 
+
           <a
             href="${esc(data)}"
             download="${esc(name)}"
@@ -399,6 +436,7 @@ function documentInfo(p) {
     `;
   }
 
+
   return html;
 }
 
@@ -411,6 +449,7 @@ $("#loginForm").onsubmit = async e => {
 
   e.preventDefault();
 
+
   try {
 
     const d =
@@ -418,30 +457,42 @@ $("#loginForm").onsubmit = async e => {
         "/login",
         {
           method: "POST",
+
           body: JSON.stringify({
+
             username:
               $("#user").value,
+
             password:
               $("#pass").value
+
           })
         }
       );
 
-    token = d.token;
+
+    token =
+      d.token;
+
 
     localStorage.setItem(
       "token",
       token
     );
 
+
     showApp();
+
 
     $("#sideName")
       .textContent =
       d.user.name;
 
+
     loadDashboard();
+
     loadNotifications();
+
 
   } catch (x) {
 
@@ -451,11 +502,17 @@ $("#loginForm").onsubmit = async e => {
   }
 };
 
-$("#logout").onclick = logout;
 
-$("#openLogin").onclick = showLogin;
+$("#logout").onclick =
+  logout;
 
-$("#openLogin2").onclick = showLogin;
+
+$("#openLogin").onclick =
+  showLogin;
+
+
+$("#openLogin2").onclick =
+  showLogin;
 
 
 /* =========================================================
@@ -463,39 +520,76 @@ $("#openLogin2").onclick = showLogin;
 ========================================================= */
 
 $$(".nav").forEach(
-  b => b.onclick = () => {
+  b => {
 
-    $$(".nav").forEach(
-      x => x.classList.remove(
+    b.onclick = () => {
+
+      $$(".nav").forEach(
+        x =>
+          x.classList.remove(
+            "active"
+          )
+      );
+
+
+      b.classList.add(
         "active"
-      )
-    );
+      );
 
-    b.classList.add(
-      "active"
-    );
 
-    ({
-      dashboard: loadDashboard,
-      workers: loadWorkers,
-      permissions: loadPermissions,
-      attendance: loadAttendance,
-      reports: loadReports
-    }[b.dataset.page])();
+      const pages = {
+
+        dashboard:
+          loadDashboard,
+
+        workers:
+          loadWorkers,
+
+        permissions:
+          loadPermissions,
+
+        attendance:
+          loadAttendance,
+
+        reports:
+          loadReports
+
+      };
+
+
+      const fn =
+        pages[
+          b.dataset.page
+        ];
+
+
+      if (fn) {
+        fn();
+      }
+
+    };
+
   }
 );
 
 
-$("#todayLabel")
-  .textContent =
-  new Date().toLocaleDateString(
-    "es-PE",
-    {
-      weekday: "long",
-      day: "2-digit",
-      month: "long"
-    }
-  );
+/* =========================================================
+   FECHA ACTUAL
+========================================================= */
+
+if ($("#todayLabel")) {
+
+  $("#todayLabel")
+    .textContent =
+    new Date().toLocaleDateString(
+      "es-PE",
+      {
+        weekday: "long",
+        day: "2-digit",
+        month: "long"
+      }
+    );
+}
 
 
 /* =========================================================
@@ -506,11 +600,13 @@ if (token) {
 
   showApp();
 
+
   api("/me")
     .then(
       d =>
         $("#sideName")
-          .textContent = d.name
+          .textContent =
+          d.name
     )
     .catch(
       () => {
@@ -518,18 +614,22 @@ if (token) {
       }
     );
 
+
   loadDashboard();
 
   loadNotifications();
+
 
   setInterval(
     loadNotifications,
     15000
   );
 
+
 } else {
 
   showLanding();
+
 }
 
 
@@ -544,24 +644,35 @@ function layout(
 ) {
 
   $("#pageTitle")
-    .textContent = title;
+    .textContent =
+    title;
+
 
   return `
+
     <div class="page-head">
 
       <div>
 
-        <h3>${title}</h3>
+        <h3>
+          ${esc(title)}
+        </h3>
 
-        <p>${sub}</p>
+        <p>
+          ${esc(sub)}
+        </p>
 
       </div>
 
+
       <div class="actions">
+
         ${actions}
+
       </div>
 
     </div>
+
   `;
 }
 
@@ -579,17 +690,21 @@ async function loadDashboard() {
         "/dashboard"
       );
 
+
     const byType =
       Array.isArray(d.byType)
         ? d.byType
         : [];
+
 
     const ranking =
       Array.isArray(d.ranking)
         ? d.ranking
         : [];
 
+
     $("#content").innerHTML =
+
       layout(
         "Resumen general",
         "Indicadores del entorno empresarial"
@@ -599,6 +714,7 @@ async function loadDashboard() {
 
 `
 <div class="stats">
+
 
 <div class="stat">
 
@@ -683,10 +799,12 @@ Registros con demora
 
 </div>
 
+
 </div>
 
 
 <div class="grid2">
+
 
 <div class="card">
 
@@ -694,13 +812,40 @@ Registros con demora
 Permisos por tipo
 </h4>
 
+
 <div class="bars">
 
 ${
   byType.length
 
-  ? byType.map(
-      x => `
+  ?
+
+  byType.map(
+    x => {
+
+      const max =
+        Math.max(
+          1,
+          ...byType.map(
+            a =>
+              Number(a.total) || 0
+          )
+        );
+
+
+      const width =
+        Math.min(
+          100,
+          (
+            (
+              Number(x.total) || 0
+            )
+            / max
+          ) * 100
+        );
+
+
+      return `
 
 <div class="bar-row">
 
@@ -708,37 +853,38 @@ ${
 ${esc(x.type)}
 </span>
 
+
 <div class="bar">
 
-<i style="
-width:${
-  Math.min(
-    100,
-    x.total /
-    Math.max(
-      ...byType.map(
-        a => a.total
-      )
-    )
-  ) * 100
-}%">
+<i
+style="
+width:${width}%
+"
+>
 </i>
 
 </div>
+
 
 <b>
 ${x.total}
 </b>
 
 </div>
-`
-    ).join("")
 
-  : `
+`;
+
+    }
+  ).join("")
+
+  :
+
+`
 <div class="empty">
 Aún no hay permisos registrados.
 </div>
 `
+
 }
 
 </div>
@@ -752,6 +898,7 @@ Aún no hay permisos registrados.
 Resumen del período
 </h4>
 
+
 <div class="kpi-line">
 
 <span>
@@ -763,6 +910,7 @@ ${d.today ?? 0}
 </b>
 
 </div>
+
 
 <div class="kpi-line">
 
@@ -776,6 +924,7 @@ ${d.weekly ?? 0}
 
 </div>
 
+
 <div class="kpi-line">
 
 <span>
@@ -788,6 +937,7 @@ ${d.monthly ?? 0}
 
 </div>
 
+
 <div class="kpi-line">
 
 <span>
@@ -799,6 +949,7 @@ ${d.approved ?? 0}
 </b>
 
 </div>
+
 
 </div>
 
@@ -814,11 +965,13 @@ style="margin-top:18px"
 Trabajadores con más registros de permisos
 </h4>
 
+
 ${
   ranking.length
 
-  ? `
+  ?
 
+`
 <div
 class="table-wrap"
 style="border:0"
@@ -830,15 +983,22 @@ style="border:0"
 
 <tr>
 
-<th>Trabajador</th>
+<th>
+Trabajador
+</th>
 
-<th>Área</th>
+<th>
+Área
+</th>
 
-<th>Total</th>
+<th>
+Total
+</th>
 
 </tr>
 
 </thead>
+
 
 <tbody>
 
@@ -863,9 +1023,11 @@ ${esc(x.names)}
 
 </td>
 
+
 <td>
 ${esc(x.area || "-")}
 </td>
+
 
 <td>
 ${x.total}
@@ -889,8 +1051,10 @@ ${x.total}
 `
 
 <div class="empty">
+
 Agrega trabajadores y permisos
 para ver estadísticas.
+
 </div>
 
 `
@@ -922,15 +1086,19 @@ async function loadWorkers() {
         "/workers"
       );
 
+
     const rows =
       Array.isArray(data.workers)
         ? data.workers
         : [];
 
+
     $("#content").innerHTML =
+
       layout(
         "Trabajadores",
         "Registro y administración del personal",
+
         `
         <button
           class="primary"
@@ -1000,6 +1168,7 @@ Acciones
 
 </thead>
 
+
 <tbody id="workerRows">
 
 ${workerRows(rows)}
@@ -1029,8 +1198,16 @@ function workerRows(rows) {
 
   return rows.length
 
-  ? rows.map(
-      w => `
+  ?
+
+  rows.map(
+    w => {
+
+      const status =
+        w.status || "Activo";
+
+
+      return `
 
 <tr>
 
@@ -1077,11 +1254,12 @@ ${esc(w.hire_date || "-")}
 
 
 <td>
-${badge(w.status)}
+${badge(status)}
 </td>
 
 
 <td>
+
 
 <button
 class="secondary"
@@ -1099,41 +1277,26 @@ Editar
 </button>
 
 
-${
-  w.status === "Activo"
+<button
+class="danger"
+onclick="deleteWorker(${w.id})"
+>
+Eliminar
+</button>
 
-  ?
-
-  `
-  <button
-  class="danger"
-  onclick="deleteWorker(${w.id})"
-  >
-  Eliminar
-  </button>
-  `
-
-  :
-
-  `
-  <button
-  class="secondary"
-  onclick="activateWorker(${w.id})"
-  >
-  Activar
-  </button>
-  `
-}
 
 </td>
 
 </tr>
 
+`;
+
+    }
+  ).join("")
+
+  :
+
 `
-    ).join("")
-
-  :`
-
 <tr>
 
 <td colspan="8">
@@ -1149,6 +1312,7 @@ No hay trabajadores registrados.
 </tr>
 
 `;
+
 }
 
 
@@ -1160,22 +1324,28 @@ async function filterWorkers() {
 
   try {
 
+    const search =
+      $("#workerSearch")?.value ||
+      "";
+
+
     const data =
       await api(
         "/workers?search=" +
-        encodeURIComponent(
-          $("#workerSearch").value
-        )
+        encodeURIComponent(search)
       );
+
 
     const rows =
       Array.isArray(data.workers)
         ? data.workers
         : [];
 
+
     $("#workerRows")
       .innerHTML =
       workerRows(rows);
+
 
   } catch (e) {
 
@@ -1195,36 +1365,54 @@ async function deleteWorker(id) {
 
   const confirmar =
     confirm(
+
       "¿Estás seguro de que deseas eliminar este trabajador?\n\n" +
-      "Esta acción eliminará definitivamente al trabajador y sus registros relacionados."
+
+      "El trabajador dejará de aparecer en la lista."
+
     );
 
+
   if (!confirmar) {
+
     return;
+
   }
+
 
   try {
 
     await api(
+
       "/workers/" + id,
+
       {
         method: "DELETE"
       }
+
     );
+
 
     toast(
-      "Trabajador eliminado definitivamente"
+      "Trabajador eliminado correctamente"
     );
 
+
     await loadWorkers();
+
     await loadDashboard();
+
 
   } catch (e) {
 
     toast(
+
       e.message ||
+
       "No se pudo eliminar el trabajador"
+
     );
+
   }
 }
 
@@ -1240,35 +1428,51 @@ async function activateWorker(id) {
       "¿Deseas volver a activar este trabajador?"
     );
 
+
   if (!confirmar) {
+
     return;
+
   }
+
 
   try {
 
     await api(
+
       "/workers/" + id,
+
       {
         method: "PUT",
+
         body: JSON.stringify({
           status: "Activo"
         })
       }
+
     );
+
 
     toast(
       "Trabajador activado correctamente"
     );
 
+
     await loadWorkers();
+
     await loadDashboard();
+
 
   } catch (e) {
 
     toast(
+
       e.message ||
+
       "No se pudo activar el trabajador"
+
     );
+
   }
 }
 
@@ -1283,9 +1487,11 @@ function workerForm(w = {}) {
 
 <h3 class="modal-title">
 
-${w.id
-  ? "Editar trabajador"
-  : "Nuevo trabajador"}
+${
+  w.id
+    ? "Editar trabajador"
+    : "Nuevo trabajador"
+}
 
 </h3>
 
@@ -1413,12 +1619,15 @@ Estado
 <select name="status">
 
 <option
+value="Activo"
 ${w.status === "Activo" ? "selected" : ""}
 >
 Activo
 </option>
 
+
 <option
+value="Inactivo"
 ${w.status === "Inactivo" ? "selected" : ""}
 >
 Inactivo
@@ -1442,6 +1651,7 @@ onclick="closeModal()"
 Cancelar
 </button>
 
+
 <button
 class="primary"
 >
@@ -1454,10 +1664,12 @@ Guardar trabajador
 
 `);
 
+
   $("#workerForm").onsubmit =
     async e => {
 
       e.preventDefault();
+
 
       const o =
         Object.fromEntries(
@@ -1466,12 +1678,15 @@ Guardar trabajador
           )
         );
 
+
       try {
 
         await api(
+
           w.id
             ? "/workers/" + w.id
             : "/workers",
+
           {
             method:
               w.id
@@ -1481,24 +1696,33 @@ Guardar trabajador
             body:
               JSON.stringify(o)
           }
+
         );
 
+
         closeModal();
+
 
         toast(
           "Trabajador guardado correctamente"
         );
 
+
         await loadWorkers();
+
         await loadDashboard();
+
 
       } catch (x) {
 
         toast(
           x.message
         );
+
       }
+
     };
+
 }
 
 
@@ -1508,12 +1732,17 @@ Guardar trabajador
 
 async function workerHistory(id) {
 
-  const d =
-    await api(
-      "/workers/" + id + "/history"
-    );
+  try {
 
-  openModal(`
+    const d =
+      await api(
+        "/workers/" +
+        id +
+        "/history"
+      );
+
+
+    openModal(`
 
 <h3 class="modal-title">
 
@@ -1573,12 +1802,14 @@ ${esc(
 
 </p>
 
+
 </div>
 
 
 <div>
 
 <div class="profile-main">
+
 
 <div class="profile-box">
 
@@ -1620,6 +1851,7 @@ ${esc(
 
 </div>
 
+
 </div>
 
 
@@ -1632,10 +1864,13 @@ style="margin-top:12px"
 Últimos permisos
 </h4>
 
+
 ${
   d.permissions.length
 
-  ? d.permissions
+  ?
+
+  d.permissions
     .slice(0, 8)
     .map(
       p => `
@@ -1643,9 +1878,13 @@ ${
 <div class="kpi-line">
 
 <span>
+
 ${esc(p.date)}
+
 ·
+
 ${esc(p.type)}
+
 </span>
 
 ${badge(p.status)}
@@ -1656,9 +1895,13 @@ ${badge(p.status)}
     )
     .join("")
 
-  : `<div class="empty">
-Sin registros.
-</div>`
+  :
+
+  `
+  <div class="empty">
+    Sin registros.
+  </div>
+  `
 }
 
 </div>
@@ -1668,6 +1911,15 @@ Sin registros.
 </div>
 
 `);
+
+  } catch (e) {
+
+    toast(
+      e.message ||
+      "No se pudo cargar el historial"
+    );
+
+  }
 }
 
 
@@ -1684,14 +1936,19 @@ async function loadPermissions() {
         "/permissions"
       );
 
+
     const rows =
       Array.isArray(data.permissions)
         ? data.permissions
         : [];
 
+
     $("#content").innerHTML =
+
       layout(
+
         "Permisos y salidas",
+
         "Solicitudes, autorizaciones y control de salidas",
 
         `
@@ -1702,6 +1959,7 @@ async function loadPermissions() {
         + Registrar permiso
         </button>
         `
+
       )
 
       +
@@ -1709,11 +1967,13 @@ async function loadPermissions() {
 `
 <div class="toolbar">
 
+
 <input
 id="psearch"
 placeholder="Buscar trabajador o DNI"
 oninput="filterPermissions()"
 >
+
 
 <select
 id="pstatus"
@@ -1790,6 +2050,7 @@ Otro
 
 </select>
 
+
 </div>
 
 
@@ -1837,6 +2098,7 @@ Acciones
 
 </thead>
 
+
 <tbody id="permissionRows">
 
 ${permissionRows(rows)}
@@ -1854,6 +2116,7 @@ ${permissionRows(rows)}
       e.message ||
       "No se pudieron cargar los permisos"
     );
+
   }
 }
 
@@ -1866,10 +2129,13 @@ function permissionRows(rows) {
 
   return rows.length
 
-  ? rows.map(
+  ?
+
+  rows.map(
     p => `
 
 <tr>
+
 
 <td>
 ${esc(p.date)}
@@ -1888,7 +2154,9 @@ display:block;
 color:#8993a2
 "
 >
+
 ${esc(p.dni)}
+
 </small>
 
 </td>
@@ -1921,30 +2189,32 @@ ${badge(p.status)}
 
 <td>
 
+
 ${
   p.status === "Pendiente"
 
-  ?`
+  ?
 
+`
 <button
 class="primary"
 onclick="reviewPermission(${p.id})"
 >
 Revisar
 </button>
-
 `
 
-  :`
+  :
 
+`
 <button
 class="secondary"
 onclick='permissionDetail(${JSON.stringify(p).replace(/'/g, "&#039;")})'
 >
 Ver
 </button>
-
 `
+
 }
 
 
@@ -1956,21 +2226,26 @@ title="Eliminar permiso"
 🗑️ Eliminar
 </button>
 
+
 </td>
+
 
 </tr>
 
 `
   ).join("")
 
-  :`
+  :
 
+`
 <tr>
 
 <td colspan="8">
 
 <div class="empty">
+
 No hay permisos registrados.
+
 </div>
 
 </td>
@@ -1978,6 +2253,7 @@ No hay permisos registrados.
 </tr>
 
 `;
+
 }
 
 
@@ -1989,37 +2265,56 @@ async function deletePermission(id) {
 
   const confirmar =
     confirm(
+
       "¿Estás seguro de que deseas eliminar este registro de permiso?\n\n" +
+
       "Esta acción eliminará el registro definitivamente."
+
     );
 
+
   if (!confirmar) {
+
     return;
+
   }
+
 
   try {
 
     await api(
+
       "/permissions/" + id,
+
       {
         method: "DELETE"
       }
+
     );
+
 
     toast(
       "Permiso eliminado correctamente"
     );
 
+
     await loadPermissions();
+
     await loadNotifications();
+
     await loadDashboard();
+
 
   } catch (e) {
 
     toast(
+
       e.message ||
+
       "No se pudo eliminar el permiso"
+
     );
+
   }
 }
 
@@ -2032,38 +2327,57 @@ async function filterPermissions() {
 
   try {
 
-    let u =
+    const search =
+      $("#psearch")?.value ||
+      "";
+
+
+    const status =
+      $("#pstatus")?.value ||
+      "";
+
+
+    const type =
+      $("#ptype")?.value ||
+      "";
+
+
+    const u =
       "/permissions?search=" +
-      encodeURIComponent(
-        $("#psearch").value
-      ) +
+      encodeURIComponent(search) +
+
       "&status=" +
-      encodeURIComponent(
-        $("#pstatus").value
-      ) +
+      encodeURIComponent(status) +
+
       "&type=" +
-      encodeURIComponent(
-        $("#ptype").value
-      );
+      encodeURIComponent(type);
+
 
     const data =
       await api(u);
+
 
     const rows =
       Array.isArray(data.permissions)
         ? data.permissions
         : [];
 
+
     $("#permissionRows")
       .innerHTML =
       permissionRows(rows);
 
+
   } catch (e) {
 
     toast(
+
       e.message ||
+
       "No se pudieron filtrar los permisos"
+
     );
+
   }
 }
 
@@ -2079,10 +2393,12 @@ async function permissionForm() {
       "/workers"
     );
 
+
   const ws =
     Array.isArray(data.workers)
       ? data.workers
       : [];
+
 
   const active =
     ws.filter(
@@ -2090,14 +2406,18 @@ async function permissionForm() {
         w.status === "Activo"
     );
 
+
   openModal(`
 
 <h3 class="modal-title">
+
 Registrar permiso o salida
+
 </h3>
 
 
 <form id="permissionForm">
+
 
 <div class="form-grid">
 
@@ -2108,14 +2428,17 @@ Registrar permiso o salida
 Trabajador *
 </label>
 
+
 <select
 name="worker_id"
 required
 >
 
+
 <option value="">
 Seleccionar trabajador
 </option>
+
 
 ${active.map(
   w => `
@@ -2123,13 +2446,16 @@ ${active.map(
 <option value="${w.id}">
 
 ${esc(w.names)}
+
 ·
+
 ${esc(w.dni)}
 
 </option>
 
 `
 ).join("")}
+
 
 </select>
 
@@ -2141,6 +2467,7 @@ ${esc(w.dni)}
 <label>
 Tipo *
 </label>
+
 
 <select
 name="type"
@@ -2176,6 +2503,7 @@ x =>
 Fecha *
 </label>
 
+
 <input
 class="input"
 type="date"
@@ -2193,6 +2521,7 @@ required
 Hora de salida
 </label>
 
+
 <input
 class="input"
 type="time"
@@ -2207,6 +2536,7 @@ name="exit_time"
 <label>
 Hora de retorno
 </label>
+
 
 <input
 class="input"
@@ -2223,6 +2553,7 @@ name="return_time"
 Motivo
 </label>
 
+
 <input
 class="input"
 name="reason"
@@ -2238,6 +2569,7 @@ placeholder="Motivo principal"
 Observación
 </label>
 
+
 <textarea
 name="observation"
 placeholder="Detalle adicional, autorización, documento, etc."
@@ -2251,6 +2583,7 @@ placeholder="Detalle adicional, autorización, documento, etc."
 <label>
 Documento sustentatorio
 </label>
+
 
 <input
 class="input"
@@ -2266,6 +2599,7 @@ placeholder="Nombre o referencia del documento (opcional)"
 
 <div class="modal-actions">
 
+
 <button
 type="button"
 class="secondary"
@@ -2274,56 +2608,75 @@ onclick="closeModal()"
 Cancelar
 </button>
 
+
 <button
 class="primary"
 >
 Registrar
 </button>
 
+
 </div>
+
 
 </form>
 
 `);
+
 
   $("#permissionForm").onsubmit =
     async e => {
 
       e.preventDefault();
 
+
       try {
 
         await api(
+
           "/permissions",
+
           {
             method: "POST",
-            body: JSON.stringify(
-              Object.fromEntries(
-                new FormData(
-                  e.target
+
+            body:
+              JSON.stringify(
+                Object.fromEntries(
+                  new FormData(
+                    e.target
+                  )
                 )
               )
-            )
           }
+
         );
 
+
         closeModal();
+
 
         toast(
           "Permiso registrado"
         );
 
+
         await loadPermissions();
+
         await loadNotifications();
+
         await loadDashboard();
+
 
       } catch (x) {
 
         toast(
           x.message
         );
+
       }
+
     };
+
 }
 
 
@@ -2340,45 +2693,64 @@ async function loadNotifications() {
         "/notifications"
       );
 
+
     const b =
       $("#pendingCount");
+
+
+    if (!b) return;
+
 
     b.textContent =
       d.pending ?? 0;
 
+
     b.classList.toggle(
+
       "zero",
+
       (d.pending ?? 0) === 0
+
     );
 
+
   } catch (e) {}
+
 }
 
 
 async function showNotifications() {
 
-  const d =
-    await api(
-      "/notifications"
-    );
+  try {
 
-  const latest =
-    Array.isArray(d.latest)
-      ? d.latest
-      : [];
+    const d =
+      await api(
+        "/notifications"
+      );
 
-  openModal(`
+
+    const latest =
+      Array.isArray(d.latest)
+        ? d.latest
+        : [];
+
+
+    openModal(`
 
 <h3 class="modal-title">
+
 🔔 Solicitudes pendientes
+
 </h3>
 
 
 ${
   latest.length
 
-  ? latest.map(
-      x => `
+  ?
+
+  latest.map(
+    x => `
 
 <div
 class="notification-row"
@@ -2401,47 +2773,69 @@ ${esc(x.names)}
 
 
 <small>
+
 ${esc(x.type)}
+
 ·
+
 ${esc(x.date)}
+
 </small>
 
 </div>
 
 
 <span class="badge amber">
+
 Pendiente
+
 </span>
+
 
 </div>
 
 `
-    ).join("")
+  ).join("")
 
   :
 
 `
 
 <div class="empty">
+
 No tienes solicitudes pendientes.
+
 </div>
 
 `
+
 }
 
 
 <div class="modal-actions">
 
+
 <button
 class="primary"
 onclick="closeModal();loadPermissions()"
 >
+
 Ver todos los permisos
+
 </button>
+
 
 </div>
 
 `);
+
+  } catch (e) {
+
+    toast(
+      e.message ||
+      "No se pudieron cargar las notificaciones"
+    );
+  }
 }
 
 
@@ -2456,10 +2850,12 @@ async function reviewPermission(id) {
       "/permissions"
     );
 
+
   const rows =
     Array.isArray(data.permissions)
       ? data.permissions
       : [];
+
 
   const p =
     rows.find(
@@ -2468,47 +2864,67 @@ async function reviewPermission(id) {
         Number(id)
     );
 
+
   if (!p) {
 
     return toast(
       "No se encontró la solicitud"
     );
+
   }
+
 
   openModal(`
 
 <h3 class="modal-title">
+
 Revisar solicitud de permiso
+
 </h3>
 
 
 <div class="review-head">
 
+
 <div class="person">
 
 <span class="avatar">
+
 ${initials(p.names)}
+
 </span>
+
 
 <div>
 
 <b>
+
 ${esc(p.names)}
+
 </b>
 
+
 <small>
+
 ${esc(p.dni)}
+
 ·
+
 ${esc(p.position || "")}
+
 ·
+
 ${esc(p.area || "")}
+
 </small>
 
 </div>
 
 </div>
 
+
 ${badge(p.status)}
+
 
 </div>
 
@@ -2517,6 +2933,7 @@ ${badge(p.status)}
 class="profile-main"
 style="margin-top:16px"
 >
+
 
 <div class="profile-box">
 
@@ -2551,12 +2968,17 @@ Horario
 </small>
 
 <b>
+
 ${esc(p.exit_time || "-")}
+
 -
+
 ${esc(p.return_time || "-")}
+
 </b>
 
 </div>
+
 
 </div>
 
@@ -2567,11 +2989,14 @@ ${esc(p.return_time || "-")}
 Motivo
 </b>
 
+
 <p>
+
 ${esc(
   p.reason ||
   "No especificado"
 )}
+
 </p>
 
 </div>
@@ -2583,11 +3008,14 @@ ${esc(
 Observación
 </b>
 
+
 <p>
+
 ${esc(
   p.observation ||
   "Sin observaciones"
 )}
+
 </p>
 
 </div>
@@ -2599,7 +3027,9 @@ ${esc(
 Documento sustentatorio
 </b>
 
+
 ${documentInfo(p)}
+
 
 </div>
 
@@ -2607,23 +3037,27 @@ ${documentInfo(p)}
 ${
   p.status === "Pendiente"
 
-  ?`
+  ?
 
+`
 <div class="decision-box">
 
 <label>
 Comentario de la decisión
 </label>
 
+
 <textarea
 id="decisionReason"
 placeholder="Opcional al aprobar; obligatorio al rechazar"
 ></textarea>
 
+
 </div>
 
 
 <div class="modal-actions">
+
 
 <button
 class="secondary"
@@ -2648,6 +3082,7 @@ onclick="decidePermission(${p.id},'Aprobado')"
 ✓ Aprobar permiso
 </button>
 
+
 </div>
 
 `
@@ -2662,11 +3097,14 @@ onclick="decidePermission(${p.id},'Aprobado')"
 Decisión
 </b>
 
+
 <p>
+
 ${esc(
   p.decision_reason ||
   "Sin comentario"
 )}
+
 </p>
 
 </div>
@@ -2684,6 +3122,7 @@ Cerrar
 </div>
 
 `
+
 }
 
 `);
@@ -2703,6 +3142,7 @@ async function decidePermission(
     $("#decisionReason")?.value ||
     "";
 
+
   if (
     status === "Rechazado" &&
     !reason.trim()
@@ -2715,47 +3155,79 @@ async function decidePermission(
     return;
   }
 
+
   if (
     !confirm(
+
       status === "Aprobado"
-        ? "¿Confirmas que deseas APROBAR esta solicitud?"
-        : "¿Confirmas que deseas RECHAZAR esta solicitud?"
+
+        ?
+
+        "¿Confirmas que deseas APROBAR esta solicitud?"
+
+        :
+
+        "¿Confirmas que deseas RECHAZAR esta solicitud?"
+
     )
   ) {
 
     return;
   }
 
+
   try {
 
     await api(
-      "/permissions/" + id + "/status",
+
+      "/permissions/" +
+      id +
+      "/status",
+
       {
         method: "PUT",
-        body: JSON.stringify({
-          status,
-          reason
-        })
+
+        body:
+          JSON.stringify({
+            status,
+            reason
+          })
       }
+
     );
+
 
     closeModal();
 
+
     toast(
+
       status === "Aprobado"
-        ? "Permiso aprobado correctamente"
-        : "Permiso rechazado"
+
+        ?
+
+        "Permiso aprobado correctamente"
+
+        :
+
+        "Permiso rechazado"
+
     );
 
+
     await loadNotifications();
+
     await loadPermissions();
+
     await loadDashboard();
+
 
   } catch (e) {
 
     toast(
       e.message
     );
+
   }
 }
 
@@ -2774,30 +3246,43 @@ async function setPermission(
     return;
   }
 
+
   try {
 
     await api(
-      "/permissions/" + id + "/status",
+
+      "/permissions/" +
+      id +
+      "/status",
+
       {
         method: "PUT",
-        body: JSON.stringify({
-          status
-        })
+
+        body:
+          JSON.stringify({
+            status
+          })
       }
+
     );
+
 
     toast(
       "Estado actualizado"
     );
 
+
     await loadPermissions();
+
     await loadDashboard();
+
 
   } catch (e) {
 
     toast(
       e.message
     );
+
   }
 }
 
@@ -2811,7 +3296,9 @@ function permissionDetail(p) {
   openModal(`
 
 <h3 class="modal-title">
+
 Detalle del permiso
+
 </h3>
 
 
@@ -2902,6 +3389,7 @@ class="card"
 style="margin-top:15px"
 >
 
+
 <div class="kpi-line">
 
 <span>
@@ -2953,6 +3441,7 @@ ${esc(p.decision_reason || "-")}
 
 </div>
 
+
 </div>
 
 
@@ -2965,7 +3454,9 @@ style="margin-top:15px"
 Documento sustentatorio
 </h4>
 
+
 ${documentInfo(p)}
+
 
 </div>
 
@@ -2983,12 +3474,17 @@ async function loadAttendance() {
 
     const rows =
       await api(
-        "/attendance?date=" + today
+        "/attendance?date=" +
+        today
       );
 
+
     $("#content").innerHTML =
+
       layout(
+
         "Asistencia",
+
         "Control diario de entradas, salidas y tardanzas",
 
         `
@@ -2999,6 +3495,7 @@ async function loadAttendance() {
         + Registrar asistencia
         </button>
         `
+
       )
 
       +
@@ -3056,6 +3553,7 @@ Observación
 
 </thead>
 
+
 <tbody id="attendanceRows">
 
 ${attendanceRows(rows)}
@@ -3065,14 +3563,19 @@ ${attendanceRows(rows)}
 </table>
 
 </div>
+
 `;
 
   } catch (e) {
 
     toast(
+
       e.message ||
+
       "No se pudo cargar la asistencia"
+
     );
+
   }
 }
 
@@ -3081,10 +3584,13 @@ function attendanceRows(rows) {
 
   return rows.length
 
-  ? rows.map(
+  ?
+
+  rows.map(
     a => `
 
 <tr>
+
 
 <td>
 
@@ -3092,13 +3598,16 @@ function attendanceRows(rows) {
 ${esc(a.names)}
 </b>
 
+
 <small
 style="
 display:block;
 color:#8993a2
 "
 >
+
 ${esc(a.area || "")}
+
 </small>
 
 </td>
@@ -3133,19 +3642,23 @@ ${a.late_minutes || 0} min
 ${esc(a.observation || "-")}
 </td>
 
+
 </tr>
 
 `
   ).join("")
 
-  :`
+  :
 
+`
 <tr>
 
 <td colspan="7">
 
 <div class="empty">
+
 No hay registros para esta fecha.
+
 </div>
 
 </td>
@@ -3153,6 +3666,7 @@ No hay registros para esta fecha.
 </tr>
 
 `;
+
 }
 
 
@@ -3162,20 +3676,28 @@ async function refreshAttendance() {
 
     const r =
       await api(
+
         "/attendance?date=" +
         $("#adate").value
+
       );
+
 
     $("#attendanceRows")
       .innerHTML =
       attendanceRows(r);
 
+
   } catch (e) {
 
     toast(
+
       e.message ||
+
       "No se pudo actualizar la asistencia"
+
     );
+
   }
 }
 
@@ -3191,19 +3713,24 @@ async function attendanceForm() {
       "/workers"
     );
 
+
   const ws =
     Array.isArray(data.workers)
       ? data.workers
       : [];
 
+
   openModal(`
 
 <h3 class="modal-title">
+
 Registrar asistencia
+
 </h3>
 
 
 <form id="attendanceForm">
+
 
 <div class="form-grid">
 
@@ -3214,19 +3741,22 @@ Registrar asistencia
 Trabajador *
 </label>
 
+
 <select
 name="worker_id"
 required
 >
 
+
 ${
-  ws
-  .filter(
-    w =>
-      w.status === "Activo"
-  )
-  .map(
-    w => `
+
+ws
+.filter(
+  w =>
+    w.status === "Activo"
+)
+.map(
+  w => `
 
 <option
 value="${w.id}"
@@ -3237,9 +3767,11 @@ ${esc(w.names)}
 </option>
 
 `
-  )
-  .join("")
+)
+.join("")
+
 }
+
 
 </select>
 
@@ -3251,6 +3783,7 @@ ${esc(w.names)}
 <label>
 Fecha
 </label>
+
 
 <input
 class="input"
@@ -3267,6 +3800,7 @@ value="${today}"
 <label>
 Estado
 </label>
+
 
 <select
 name="status"
@@ -3299,6 +3833,7 @@ Vacaciones
 Entrada
 </label>
 
+
 <input
 class="input"
 type="time"
@@ -3314,6 +3849,7 @@ name="entry_time"
 Salida
 </label>
 
+
 <input
 class="input"
 type="time"
@@ -3328,6 +3864,7 @@ name="exit_time"
 <label>
 Minutos de tardanza
 </label>
+
 
 <input
 class="input"
@@ -3346,6 +3883,7 @@ value="0"
 Justificación / observación
 </label>
 
+
 <textarea
 name="observation"
 ></textarea>
@@ -3358,6 +3896,7 @@ name="observation"
 
 <div class="modal-actions">
 
+
 <button
 type="button"
 class="secondary"
@@ -3366,55 +3905,73 @@ onclick="closeModal()"
 Cancelar
 </button>
 
+
 <button
 class="primary"
 >
 Guardar
 </button>
 
+
 </div>
+
 
 </form>
 
 `);
+
 
   $("#attendanceForm").onsubmit =
     async e => {
 
       e.preventDefault();
 
+
       try {
 
         await api(
+
           "/attendance",
+
           {
             method: "POST",
-            body: JSON.stringify(
-              Object.fromEntries(
-                new FormData(
-                  e.target
+
+            body:
+              JSON.stringify(
+                Object.fromEntries(
+                  new FormData(
+                    e.target
+                  )
                 )
               )
-            )
           }
+
         );
 
+
         closeModal();
+
 
         toast(
           "Asistencia guardada"
         );
 
+
         await loadAttendance();
+
         await loadDashboard();
+
 
       } catch (x) {
 
         toast(
           x.message
         );
+
       }
+
     };
+
 }
 
 
@@ -3428,6 +3985,7 @@ function loadReports() {
     .textContent =
     "Reportes";
 
+
   $("#content").innerHTML =
 
     layout(
@@ -3435,7 +3993,7 @@ function loadReports() {
       "Exporta información para control administrativo"
     )
 
-+
+    +
 
 `
 <div class="grid2">
@@ -3446,6 +4004,7 @@ function loadReports() {
 <h4>
 Reporte de permisos y salidas
 </h4>
+
 
 <p
 style="
@@ -3476,6 +4035,7 @@ onclick="downloadReport('excel')"
 >
 Descargar Excel
 </button>
+
 
 </div>
 
@@ -3538,7 +4098,9 @@ Dashboard
 
 </div>
 
+
 </div>
+
 
 </div>
 `;
@@ -3551,27 +4113,67 @@ Dashboard
 
 async function downloadReport(type) {
 
-  const b =
-    await api(
-      "/reports/" + type
+  try {
+
+    const b =
+      await api(
+        "/reports/" +
+        type
+      );
+
+
+    const url =
+      URL.createObjectURL(b);
+
+
+    const a =
+      document.createElement(
+        "a"
+      );
+
+
+    a.href =
+      url;
+
+
+    a.download =
+      type === "pdf"
+
+        ?
+
+        "Reporte_Permisos.pdf"
+
+        :
+
+        "Reporte_Permisos.xlsx";
+
+
+    document.body.appendChild(a);
+
+
+    a.click();
+
+
+    a.remove();
+
+
+    setTimeout(
+      () =>
+        URL.revokeObjectURL(url),
+      1000
     );
 
-  const url =
-    URL.createObjectURL(b);
 
-  const a =
-    document.createElement(
-      "a"
+  } catch (e) {
+
+    toast(
+
+      e.message ||
+
+      "No se pudo descargar el reporte"
+
     );
 
-  a.href = url;
-
-  a.download =
-    type === "pdf"
-      ? "Reporte_Permisos.pdf"
-      : "Reporte_Permisos.xlsx";
-
-  a.click();
-
-  URL.revokeObjectURL(url);
+  }
 }
+```
