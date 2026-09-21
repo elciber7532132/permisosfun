@@ -5,389 +5,302 @@ const API = window.API_BASE || 'https://permisosfun-1.onrender.com/api';
 
 let token = localStorage.getItem("token") || "";
 
-
 /* =========================================================
-   UTILIDADES
+UTILIDADES
 ========================================================= */
 
 const esc = s => String(s ?? "").replace(
-  /[&<>"']/g,
-  m => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;"
-  }[m])
+/[&<>"']/g,
+m => ({
+"&": "&",
+"<": "<",
+">": ">",
+'"': """,
+"'": "'"
+}[m])
 );
 
 const today = new Date().toISOString().slice(0, 10);
 
-
 function toast(s) {
-  const e = $("#toast");
+const e = $("#toast");
 
-  if (!e) return;
+if (!e) return;
 
-  e.textContent = s;
+e.textContent = s;
 
-  e.classList.add("toast-show");
+e.classList.add("toast-show");
 
-  setTimeout(
-    () => e.classList.remove("toast-show"),
-    2500
-  );
+setTimeout(
+() => e.classList.remove("toast-show"),
+2500
+);
 }
-
 
 function openModal(html) {
-  const modalContent = $("#modalContent");
-  const modal = $("#modal");
+const modalContent = $("#modalContent");
+const modal = $("#modal");
 
-  if (!modalContent || !modal) return;
+if (!modalContent || !modal) return;
 
-  modalContent.innerHTML = html;
-  modal.classList.remove("hidden");
+modalContent.innerHTML = html;
+modal.classList.remove("hidden");
 }
-
 
 function closeModal() {
-  const modal = $("#modal");
+const modal = $("#modal");
 
-  if (!modal) return;
+if (!modal) return;
 
-  modal.classList.add("hidden");
+modal.classList.add("hidden");
 }
-
 
 function initials(n) {
-  return String(n || "")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(x => x[0])
-    .join("")
-    .toUpperCase();
+return String(n || "")
+.split(" ")
+.filter(Boolean)
+.slice(0, 2)
+.map(x => x[0])
+.join("")
+.toUpperCase();
 }
-
 
 function badge(s) {
 
-  let c =
-    s === "Aprobado"
-      ? "green"
-      : s === "Rechazado"
-      ? "red"
-      : s === "Pendiente"
-      ? "amber"
-      : s === "Activo"
-      ? "green"
-      : s === "Inactivo"
-      ? "gray"
-      : "blue";
+let c =
+s === "Aprobado"
+? "green"
+: s === "Rechazado"
+? "red"
+: s === "Pendiente"
+? "amber"
+: s === "Activo"
+? "green"
+: s === "Inactivo"
+? "gray"
+: "blue";
 
-  return `
-    <span class="badge ${c}">
-      ${esc(s || "-")}
-    </span>
+return `     <span class="badge ${c}">
+      ${esc(s || "-")}     </span>
   `;
 }
 
-
 /* =========================================================
-   PANTALLAS
+PANTALLAS
 ========================================================= */
 
 function showLogin() {
 
-  $("#landing")?.classList.add("hidden");
-  $("#login")?.classList.remove("hidden");
-  $("#app")?.classList.add("hidden");
+$("#landing")?.classList.add("hidden");
+$("#login")?.classList.remove("hidden");
+$("#app")?.classList.add("hidden");
 
-  setTimeout(
-    () => $("#user")?.focus(),
-    50
-  );
+setTimeout(
+() => $("#user")?.focus(),
+50
+);
 }
-
 
 function showLanding() {
 
-  $("#landing")?.classList.remove("hidden");
-  $("#login")?.classList.add("hidden");
-  $("#app")?.classList.add("hidden");
+$("#landing")?.classList.remove("hidden");
+$("#login")?.classList.add("hidden");
+$("#app")?.classList.add("hidden");
 }
-
 
 function showApp() {
 
-  $("#landing")?.classList.add("hidden");
-  $("#login")?.classList.add("hidden");
-  $("#app")?.classList.remove("hidden");
+$("#landing")?.classList.add("hidden");
+$("#login")?.classList.add("hidden");
+$("#app")?.classList.remove("hidden");
 }
 
-
 /* =========================================================
-   API
+API
 ========================================================= */
 
 function headers(json = true) {
 
-  const h = {};
+const h = {};
 
-  if (token) {
-    h.Authorization = "Bearer " + token;
-  }
-
-  if (json) {
-    h["Content-Type"] = "application/json";
-  }
-
-  return h;
+if (token) {
+h.Authorization = "Bearer " + token;
 }
 
+if (json) {
+h["Content-Type"] = "application/json";
+}
+
+return h;
+}
 
 async function api(url, opt = {}) {
 
-  const r = await fetch(
-    API + url,
-    {
-      ...opt,
+const r = await fetch(
+API + url,
+{
+...opt,
 
-      headers: {
-        ...headers(
-          opt.body !== undefined
-        ),
+```
+  headers: {
+    ...headers(
+      opt.body !== undefined
+    ),
 
-        ...(opt.headers || {})
-      }
-    }
-  );
-
-
-  if (r.status === 401) {
-
-    if (url !== "/login") {
-      logout();
-    }
-
-    throw Error(
-      "No autorizado"
-    );
+    ...(opt.headers || {})
   }
+}
+```
 
+);
 
-  const t =
-    r.headers.get("content-type") || "";
+if (r.status === 401) {
 
-
-  let d;
-
-  if (t.includes("json")) {
-    d = await r.json();
-  } else if (
-    t.includes("application/pdf") ||
-    t.includes(
-      "application/vnd.openxmlformats-officedocument"
-    )
-  ) {
-    d = await r.blob();
-  } else {
-    const text = await r.text();
-
-    try {
-      d = JSON.parse(text);
-    } catch {
-      d = {
-        error: text || "Respuesta inválida del servidor"
-      };
-    }
-  }
-
-
-  if (!r.ok) {
-
-    throw Error(
-      d?.error ||
-      "Error del servidor"
-    );
-  }
-
-
-  return d;
+```
+if (url !== "/login") {
+  logout();
 }
 
+throw Error(
+  "No autorizado"
+);
+```
+
+}
+
+const t =
+r.headers.get("content-type") || "";
+
+let d;
+
+if (t.includes("json")) {
+
+```
+d = await r.json();
+```
+
+} else if (
+t.includes("application/pdf") ||
+t.includes(
+"application/vnd.openxmlformats-officedocument"
+)
+) {
+
+```
+d = await r.blob();
+```
+
+} else {
+
+```
+const text = await r.text();
+
+try {
+
+  d = JSON.parse(text);
+
+} catch {
+
+  d = {
+    error: text || "Respuesta inválida del servidor"
+  };
+
+}
+```
+
+}
+
+if (!r.ok) {
+
+```
+throw Error(
+  d?.error ||
+  "Error del servidor"
+);
+```
+
+}
+
+return d;
+}
 
 /* =========================================================
-   LOGOUT
+LOGOUT
 ========================================================= */
 
 function logout() {
 
-  localStorage.removeItem("token");
+localStorage.removeItem("token");
 
-  token = "";
+token = "";
 
-  $("#app")?.classList.add("hidden");
+$("#app")?.classList.add("hidden");
 
-  showLanding();
+showLanding();
 }
 
-
 /* =========================================================
-   DOCUMENTOS SUSTENTATORIOS
+DOCUMENTOS SUSTENTATORIOS
 ========================================================= */
 
 function documentInfo(p) {
 
-  const data =
-    p.document || "";
+const data =
+p.document || "";
 
-  const name =
-    p.document_name ||
-    "Documento sustentatorio";
+const name =
+p.document_name ||
+"Documento sustentatorio";
 
-  const type =
-    p.document_type || "";
+const type =
+p.document_type || "";
 
+if (!data) {
 
-  if (!data) {
+```
+return `
+  <div class="empty">
+    No se adjuntó documento sustentatorio.
+  </div>
+`;
+```
 
-    return `
-      <div class="empty">
-        No se adjuntó documento sustentatorio.
-      </div>
-    `;
-  }
+}
 
+let html = `
 
-  let html = `
+```
+<div
+  style="
+    padding:14px;
+    border:1px solid #e2e8f0;
+    border-radius:10px;
+    background:#f8fafc;
+  "
+>
 
-    <div
-      style="
-        padding:14px;
-        border:1px solid #e2e8f0;
-        border-radius:10px;
-        background:#f8fafc;
-      "
-    >
+  <div
+    style="
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:12px;
+    "
+  >
 
-      <div
-        style="
-          display:flex;
-          align-items:center;
-          gap:10px;
-          margin-bottom:12px;
-        "
-      >
+    <span style="font-size:25px;">
+      📎
+    </span>
 
-        <span style="font-size:25px;">
-          📎
-        </span>
+    <div>
 
-        <div>
+      <b>
+        ${esc(name)}
+      </b>
 
-          <b>
-            ${esc(name)}
-          </b>
-
-          ${
-            type
-              ? `
-                <small
-                  style="
-                    display:block;
-                    color:#718096;
-                    margin-top:3px;
-                  "
-                >
-                  ${esc(type)}
-                </small>
-              `
-              : ""
-          }
-
-        </div>
-
-      </div>
-
-
-      <div
-        style="
-          display:flex;
-          gap:8px;
-          flex-wrap:wrap;
-        "
-      >
-
-        <a
-          href="${esc(data)}"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="secondary"
-          style="
-            display:inline-block;
-            text-decoration:none;
-            padding:9px 13px;
-          "
-        >
-          👁️ Ver documento
-        </a>
-
-
-        <a
-          href="${esc(data)}"
-          download="${esc(name)}"
-          class="primary"
-          style="
-            display:inline-block;
-            text-decoration:none;
-            padding:9px 13px;
-          "
-        >
-          📥 Descargar
-        </a>
-
-      </div>
-
-    </div>
-  `;
-
-
-  if (
-    type.startsWith("image/")
-  ) {
-
-    html = `
-
-      <div
-        style="
-          padding:14px;
-          border:1px solid #e2e8f0;
-          border-radius:10px;
-          background:#f8fafc;
-        "
-      >
-
-        <div
-          style="
-            display:flex;
-            align-items:center;
-            gap:10px;
-            margin-bottom:12px;
-          "
-        >
-
-          <span style="font-size:25px;">
-            🖼️
-          </span>
-
-          <div>
-
-            <b>
-              ${esc(name)}
-            </b>
-
+      ${
+        type
+          ? `
             <small
               style="
                 display:block;
@@ -395,205 +308,301 @@ function documentInfo(p) {
                 margin-top:3px;
               "
             >
-              Imagen adjunta
+              ${esc(type)}
             </small>
+          `
+          : ""
+      }
 
-          </div>
+    </div>
 
-        </div>
+  </div>
 
 
-        <img
-          src="${esc(data)}"
-          alt="${esc(name)}"
+  <div
+    style="
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    "
+  >
+
+    <a
+      href="${esc(data)}"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="secondary"
+      style="
+        display:inline-block;
+        text-decoration:none;
+        padding:9px 13px;
+      "
+    >
+      👁️ Ver documento
+    </a>
+
+
+    <a
+      href="${esc(data)}"
+      download="${esc(name)}"
+      class="primary"
+      style="
+        display:inline-block;
+        text-decoration:none;
+        padding:9px 13px;
+      "
+    >
+      📥 Descargar
+    </a>
+
+  </div>
+
+</div>
+```
+
+`;
+
+if (
+type.startsWith("image/")
+) {
+
+```
+html = `
+
+  <div
+    style="
+      padding:14px;
+      border:1px solid #e2e8f0;
+      border-radius:10px;
+      background:#f8fafc;
+    "
+  >
+
+    <div
+      style="
+        display:flex;
+        align-items:center;
+        gap:10px;
+        margin-bottom:12px;
+      "
+    >
+
+      <span style="font-size:25px;">
+        🖼️
+      </span>
+
+      <div>
+
+        <b>
+          ${esc(name)}
+        </b>
+
+        <small
           style="
-            max-width:100%;
-            max-height:450px;
             display:block;
-            margin:0 auto 15px;
-            border-radius:8px;
-            border:1px solid #e2e8f0;
-            object-fit:contain;
-            background:white;
+            color:#718096;
+            margin-top:3px;
           "
         >
-
-
-        <div
-          style="
-            display:flex;
-            gap:8px;
-            flex-wrap:wrap;
-          "
-        >
-
-          <a
-            href="${esc(data)}"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="secondary"
-            style="
-              display:inline-block;
-              text-decoration:none;
-              padding:9px 13px;
-            "
-          >
-            👁️ Abrir imagen
-          </a>
-
-
-          <a
-            href="${esc(data)}"
-            download="${esc(name)}"
-            class="primary"
-            style="
-              display:inline-block;
-              text-decoration:none;
-              padding:9px 13px;
-            "
-          >
-            📥 Descargar
-          </a>
-
-        </div>
+          Imagen adjunta
+        </small>
 
       </div>
-    `;
-  }
+
+    </div>
 
 
-  return html;
+    <img
+      src="${esc(data)}"
+      alt="${esc(name)}"
+      style="
+        max-width:100%;
+        max-height:450px;
+        display:block;
+        margin:0 auto 15px;
+        border-radius:8px;
+        border:1px solid #e2e8f0;
+        object-fit:contain;
+        background:white;
+      "
+    >
+
+
+    <div
+      style="
+        display:flex;
+        gap:8px;
+        flex-wrap:wrap;
+      "
+    >
+
+      <a
+        href="${esc(data)}"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="secondary"
+        style="
+          display:inline-block;
+          text-decoration:none;
+          padding:9px 13px;
+        "
+      >
+        👁️ Abrir imagen
+      </a>
+
+
+      <a
+        href="${esc(data)}"
+        download="${esc(name)}"
+        class="primary"
+        style="
+          display:inline-block;
+          text-decoration:none;
+          padding:9px 13px;
+        "
+      >
+        📥 Descargar
+      </a>
+
+    </div>
+
+  </div>
+`;
+```
+
 }
 
+return html;
+}
 
 /* =========================================================
-   LOGIN
+LOGIN
 ========================================================= */
 
 const loginForm = $("#loginForm");
 
 if (loginForm) {
 
-  loginForm.onsubmit = async e => {
+loginForm.onsubmit = async e => {
 
-    e.preventDefault();
-
-
-    const username =
-      $("#user")?.value.trim() || "";
-
-    const password =
-      $("#pass")?.value || "";
+```
+e.preventDefault();
 
 
-    if (!username || !password) {
+const username =
+  $("#user")?.value.trim() || "";
 
-      toast(
-        "Ingresa usuario y contraseña"
-      );
-
-      return;
-    }
+const password =
+  $("#pass")?.value || "";
 
 
-    try {
+if (!username || !password) {
 
-      const d =
-        await api(
-          "/login",
-          {
-            method: "POST",
+  toast(
+    "Ingresa usuario y contraseña"
+  );
 
-            body: JSON.stringify({
-
-              username,
-              password
-
-            })
-          }
-        );
-
-
-      if (!d.token) {
-
-        throw Error(
-          "El servidor no devolvió el token de acceso"
-        );
-      }
-
-
-      token =
-        d.token;
-
-
-      localStorage.setItem(
-        "token",
-        token
-      );
-
-
-      showApp();
-
-
-      if ($("#sideName")) {
-
-        $("#sideName")
-          .textContent =
-          d.user?.name ||
-          d.user?.username ||
-          username;
-
-      }
-
-
-      await loadDashboard();
-
-      await loadNotifications();
-
-
-      setInterval(
-        loadNotifications,
-        15000
-      );
-
-
-    } catch (x) {
-
-      console.error(
-        "ERROR LOGIN:",
-        x
-      );
-
-      toast(
-        x.message ||
-        "No se pudo iniciar sesión"
-      );
-
-    }
-  };
+  return;
 }
 
+
+try {
+
+  const d =
+    await api(
+      "/login",
+      {
+        method: "POST",
+
+        body: JSON.stringify({
+
+          username,
+          password
+
+        })
+      }
+    );
+
+
+  if (!d.token) {
+
+    throw Error(
+      "El servidor no devolvió el token de acceso"
+    );
+  }
+
+
+  token =
+    d.token;
+
+
+  localStorage.setItem(
+    "token",
+    token
+  );
+
+
+  showApp();
+
+
+  if ($("#sideName")) {
+
+    $("#sideName")
+      .textContent =
+      d.user?.name ||
+      d.user?.username ||
+      username;
+
+  }
+
+
+  await loadDashboard();
+
+  await loadNotifications();
+
+
+  setInterval(
+    loadNotifications,
+    15000
+  );
+
+
+} catch (x) {
+
+  console.error(
+    "ERROR LOGIN:",
+    x
+  );
+
+  toast(
+    x.message ||
+    "No se pudo iniciar sesión"
+  );
+
+}
+```
+
+};
+
+}
 
 if ($("#logout")) {
-  $("#logout").onclick = logout;
+$("#logout").onclick = logout;
 }
-
 
 if ($("#openLogin")) {
-  $("#openLogin").onclick = showLogin;
+$("#openLogin").onclick = showLogin;
 }
-
 
 if ($("#openLogin2")) {
-  $("#openLogin2").onclick = showLogin;
+$("#openLogin2").onclick = showLogin;
 }
 
-
 /* =========================================================
-   NAVEGACIÓN
+NAVEGACIÓN
 ========================================================= */
 
-$$(".nav").forEach(
+$$$(".nav").forEach(
   b => {
 
     b.onclick = () => {
@@ -798,7 +807,6 @@ async function loadDashboard() {
 `
 <div class="stats">
 
-
 <div class="stat">
 
 <span class="label">
@@ -971,7 +979,6 @@ Aún no hay permisos registrados.
 }
 
 </div>
-
 </div>
 
 
@@ -1349,7 +1356,6 @@ ${badge(status)}
 
 <td>
 
-
 <button
 class="secondary"
 onclick="workerHistory(${w.id})"
@@ -1401,7 +1407,6 @@ No hay trabajadores registrados.
 </tr>
 
 `;
-
 }
 
 
@@ -2031,6 +2036,24 @@ async function loadPermissions() {
         : [];
 
 
+    /*
+      IMPORTANTE:
+      Cargamos también los trabajadores para relacionar
+      cada permiso con su nombre mediante el DNI.
+    */
+
+    const workersData =
+      await api(
+        "/workers"
+      );
+
+
+    const workers =
+      Array.isArray(workersData.workers)
+        ? workersData.workers
+        : [];
+
+
     $("#content").innerHTML =
 
       layout(
@@ -2189,7 +2212,7 @@ Acciones
 
 <tbody id="permissionRows">
 
-${permissionRows(rows)}
+${permissionRows(rows, workers)}
 
 </tbody>
 
@@ -2210,17 +2233,101 @@ ${permissionRows(rows)}
 
 
 /* =========================================================
+   OBTENER TRABAJADOR DEL PERMISO
+========================================================= */
+
+function getWorkerForPermission(p, workers = []) {
+
+  /*
+    Primero intentamos por worker_id.
+  */
+
+  if (p.worker_id !== undefined && p.worker_id !== null) {
+
+    const byId =
+      workers.find(
+        w =>
+          Number(w.id) ===
+          Number(p.worker_id)
+      );
+
+    if (byId) {
+      return byId;
+    }
+  }
+
+
+  /*
+    Si no existe worker_id, buscamos por DNI.
+  */
+
+  if (p.dni) {
+
+    const dniPermiso =
+      String(p.dni).trim();
+
+
+    const byDni =
+      workers.find(
+        w =>
+          String(w.dni || "").trim() ===
+          dniPermiso
+      );
+
+
+    if (byDni) {
+      return byDni;
+    }
+  }
+
+
+  return null;
+}
+
+
+/* =========================================================
    FILAS DE PERMISOS
 ========================================================= */
 
-function permissionRows(rows) {
+function permissionRows(rows, workers = []) {
 
   return rows.length
 
   ?
 
   rows.map(
-    p => `
+    p => {
+
+      /*
+        Buscamos el trabajador asociado al permiso.
+      */
+
+      const worker =
+        getWorkerForPermission(
+          p,
+          workers
+        );
+
+
+      /*
+        El nombre se toma primero del trabajador.
+        Si por alguna razón no existe, usamos p.names.
+      */
+
+      const workerName =
+        worker?.names ||
+        p.names ||
+        p.nombre ||
+        "Sin nombre";
+
+
+      const workerDni =
+        worker?.dni ||
+        p.dni ||
+        "-";
+
+
+      return `
 
 <tr>
 
@@ -2232,8 +2339,16 @@ ${esc(p.date)}
 
 <td>
 
+<div class="person">
+
+<span class="avatar">
+${initials(workerName)}
+</span>
+
+<div>
+
 <b>
-${esc(p.names)}
+${esc(workerName)}
 </b>
 
 <small
@@ -2243,9 +2358,14 @@ color:#8993a2
 "
 >
 
-${esc(p.dni)}
+DNI:
+${esc(workerDni)}
 
 </small>
+
+</div>
+
+</div>
 
 </td>
 
@@ -2297,7 +2417,11 @@ Revisar
 `
 <button
 class="secondary"
-onclick='permissionDetail(${JSON.stringify(p).replace(/'/g, "&#039;")})'
+onclick='permissionDetail(${JSON.stringify({
+  ...p,
+  names: workerName,
+  dni: workerDni
+}).replace(/'/g, "&#039;")})'
 >
 Ver
 </button>
@@ -2320,7 +2444,9 @@ title="Eliminar permiso"
 
 </tr>
 
-`
+`;
+
+    }
   ).join("")
 
   :
@@ -2341,7 +2467,6 @@ No hay permisos registrados.
 </tr>
 
 `;
-
 }
 
 
@@ -2449,9 +2574,28 @@ async function filterPermissions() {
         : [];
 
 
+    /*
+      También cargamos trabajadores para mostrar nombres.
+    */
+
+    const workersData =
+      await api(
+        "/workers"
+      );
+
+
+    const workers =
+      Array.isArray(workersData.workers)
+        ? workersData.workers
+        : [];
+
+
     $("#permissionRows")
       .innerHTML =
-      permissionRows(rows);
+      permissionRows(
+        rows,
+        workers
+      );
 
 
   } catch (e) {
@@ -2966,6 +3110,42 @@ async function reviewPermission(id) {
   }
 
 
+  /*
+    Buscamos el trabajador para obtener su nombre.
+  */
+
+  const workersData =
+    await api(
+      "/workers"
+    );
+
+
+  const workers =
+    Array.isArray(workersData.workers)
+      ? workersData.workers
+      : [];
+
+
+  const worker =
+    getWorkerForPermission(
+      p,
+      workers
+    );
+
+
+  const workerName =
+    worker?.names ||
+    p.names ||
+    p.nombre ||
+    "Sin nombre";
+
+
+  const workerDni =
+    worker?.dni ||
+    p.dni ||
+    "-";
+
+
   openModal(`
 
 <h3 class="modal-title">
@@ -2982,7 +3162,7 @@ Revisar solicitud de permiso
 
 <span class="avatar">
 
-${initials(p.names)}
+${initials(workerName)}
 
 </span>
 
@@ -2991,22 +3171,22 @@ ${initials(p.names)}
 
 <b>
 
-${esc(p.names)}
+${esc(workerName)}
 
 </b>
 
 
 <small>
 
-${esc(p.dni)}
+${esc(workerDni)}
 
 ·
 
-${esc(p.position || "")}
+${esc(worker?.position || p.position || "")}
 
 ·
 
-${esc(p.area || "")}
+${esc(worker?.area || p.area || "")}
 
 </small>
 
@@ -3218,6 +3398,7 @@ Cerrar
 }
 
 `);
+
 }
 
 
@@ -3404,7 +3585,20 @@ Trabajador
 </small>
 
 <b>
-${esc(p.names)}
+${esc(p.names || p.nombre || "Sin nombre")}
+</b>
+
+</div>
+
+
+<div class="profile-box">
+
+<small>
+DNI
+</small>
+
+<b>
+${esc(p.dni || "-")}
 </b>
 
 </div>
@@ -3553,6 +3747,7 @@ ${documentInfo(p)}
 </div>
 
 `);
+
 }
 
 
@@ -3807,6 +4002,7 @@ async function refreshAttendance() {
     );
 
   }
+
 }
 
 
@@ -3857,7 +4053,6 @@ required
 
 
 ${
-
 ws
 .filter(
   w =>
@@ -3877,7 +4072,6 @@ ${esc(w.names)}
 `
 )
 .join("")
-
 }
 
 
@@ -4212,6 +4406,7 @@ Dashboard
 
 </div>
 `;
+
 }
 
 
@@ -4283,4 +4478,6 @@ async function downloadReport(type) {
     );
 
   }
+
 }
+$$$
