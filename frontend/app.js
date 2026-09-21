@@ -1,3 +1,4 @@
+javascript
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
@@ -217,8 +218,17 @@ function documentInfo(p) {
     `;
   }
 
-  let html = `
+  const id =
+    "documentViewer_" +
+    Date.now() +
+    "_" +
+    Math.random()
+      .toString(36)
+      .slice(2);
+
+  return `
     <div
+      id="${id}"
       style="
         padding:14px;
         border:1px solid #e2e8f0;
@@ -237,7 +247,7 @@ function documentInfo(p) {
       >
 
         <span style="font-size:25px;">
-          📎
+          ${type.startsWith("image/") ? "🖼️" : "📎"}
         </span>
 
         <div>
@@ -246,25 +256,71 @@ function documentInfo(p) {
             ${esc(name)}
           </b>
 
-          ${
-            type
-              ? `
-                <small
-                  style="
-                    display:block;
-                    color:#718096;
-                    margin-top:3px;
-                  "
-                >
-                  ${esc(type)}
-                </small>
-              `
-              : ""
-          }
+          <small
+            style="
+              display:block;
+              color:#718096;
+              margin-top:3px;
+            "
+          >
+            ${esc(type || "Documento adjunto")}
+          </small>
 
         </div>
 
       </div>
+
+      ${
+        type.startsWith("image/")
+          ? `
+            <img
+              src="${data}"
+              alt="${esc(name)}"
+              style="
+                max-width:100%;
+                max-height:450px;
+                display:block;
+                margin:0 auto 15px;
+                border-radius:8px;
+                border:1px solid #e2e8f0;
+                object-fit:contain;
+                background:white;
+              "
+            >
+          `
+          : type === "application/pdf"
+          ? `
+            <div
+              style="
+                padding:20px;
+                text-align:center;
+                background:#fff;
+                border:1px solid #e2e8f0;
+                border-radius:8px;
+                margin-bottom:15px;
+              "
+            >
+              <div style="font-size:45px;">
+                📄
+              </div>
+
+              <b>
+                Archivo PDF adjunto
+              </b>
+
+              <p
+                style="
+                  color:#718096;
+                  font-size:12px;
+                  margin:6px 0 0;
+                "
+              >
+                Haz clic en "Ver documento" para abrirlo.
+              </p>
+            </div>
+          `
+          : ""
+      }
 
       <div
         style="
@@ -274,139 +330,229 @@ function documentInfo(p) {
         "
       >
 
-        <a
-          href="${esc(data)}"
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
           class="secondary"
+          id="${id}_open"
           style="
-            display:inline-block;
-            text-decoration:none;
             padding:9px 13px;
           "
         >
           👁️ Ver documento
-        </a>
+        </button>
 
-        <a
-          href="${esc(data)}"
-          download="${esc(name)}"
+        <button
+          type="button"
           class="primary"
+          id="${id}_download"
           style="
-            display:inline-block;
-            text-decoration:none;
             padding:9px 13px;
           "
         >
           📥 Descargar
-        </a>
+        </button>
 
       </div>
 
     </div>
   `;
 
-  if (type.startsWith("image/")) {
-    html = `
-      <div
-        style="
-          padding:14px;
-          border:1px solid #e2e8f0;
-          border-radius:10px;
-          background:#f8fafc;
-        "
-      >
+  setTimeout(() => {
 
-        <div
-          style="
-            display:flex;
-            align-items:center;
-            gap:10px;
-            margin-bottom:12px;
-          "
-        >
+    const openButton =
+      document.getElementById(
+        id + "_open"
+      );
 
-          <span style="font-size:25px;">
-            🖼️
-          </span>
+    const downloadButton =
+      document.getElementById(
+        id + "_download"
+      );
 
-          <div>
+    if (openButton) {
 
-            <b>
-              ${esc(name)}
-            </b>
+      openButton.onclick = () => {
 
-            <small
-              style="
-                display:block;
-                color:#718096;
-                margin-top:3px;
-              "
-            >
-              Imagen adjunta
-            </small>
+        try {
 
-          </div>
+          const nuevaVentana =
+            window.open(
+              "",
+              "_blank"
+            );
 
-        </div>
+          if (!nuevaVentana) {
 
-        <img
-          src="${esc(data)}"
-          alt="${esc(name)}"
-          style="
-            max-width:100%;
-            max-height:450px;
-            display:block;
-            margin:0 auto 15px;
-            border-radius:8px;
-            border:1px solid #e2e8f0;
-            object-fit:contain;
-            background:white;
-          "
-        >
+            toast(
+              "El navegador bloqueó la nueva pestaña. Permite ventanas emergentes."
+            );
 
-        <div
-          style="
-            display:flex;
-            gap:8px;
-            flex-wrap:wrap;
-          "
-        >
+            return;
+          }
 
-          <a
-            href="${esc(data)}"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="secondary"
-            style="
-              display:inline-block;
-              text-decoration:none;
-              padding:9px 13px;
-            "
-          >
-            👁️ Abrir imagen
-          </a>
+          /*
+             IMÁGENES
+          */
 
-          <a
-            href="${esc(data)}"
-            download="${esc(name)}"
-            class="primary"
-            style="
-              display:inline-block;
-              text-decoration:none;
-              padding:9px 13px;
-            "
-          >
-            📥 Descargar
-          </a>
+          if (
+            type === "image/jpeg" ||
+            type === "image/png"
+          ) {
 
-        </div>
+            nuevaVentana.document.write(`
+              <!DOCTYPE html>
 
-      </div>
-    `;
-  }
+              <html>
 
-  return html;
+              <head>
+
+                <title>
+                  ${esc(name)}
+                </title>
+
+                <meta
+                  charset="UTF-8"
+                >
+
+                <style>
+
+                  html,
+                  body {
+
+                    margin:0;
+
+                    padding:0;
+
+                    width:100%;
+
+                    min-height:100%;
+
+                    background:#111827;
+
+                  }
+
+                  body {
+
+                    display:flex;
+
+                    align-items:center;
+
+                    justify-content:center;
+
+                  }
+
+                  img {
+
+                    max-width:95vw;
+
+                    max-height:95vh;
+
+                    object-fit:contain;
+
+                  }
+
+                </style>
+
+              </head>
+
+              <body>
+
+                <img
+                  src="${data}"
+                  alt="${esc(name)}"
+                >
+
+              </body>
+
+              </html>
+            `);
+
+            nuevaVentana.document.close();
+
+            return;
+          }
+
+          /*
+             PDF
+          */
+
+          if (
+            type ===
+            "application/pdf"
+          ) {
+
+            nuevaVentana.location.href =
+              data;
+
+            return;
+          }
+
+          /*
+             OTROS TIPOS
+          */
+
+          nuevaVentana.location.href =
+            data;
+
+        } catch (error) {
+
+          console.error(
+            "ERROR AL ABRIR DOCUMENTO:",
+            error
+          );
+
+          toast(
+            "No se pudo abrir el documento"
+          );
+
+        }
+
+      };
+    }
+
+    if (downloadButton) {
+
+      downloadButton.onclick = () => {
+
+        try {
+
+          const a =
+            document.createElement(
+              "a"
+            );
+
+          a.href = data;
+
+          a.download =
+            name ||
+            "documento";
+
+          document.body.appendChild(
+            a
+          );
+
+          a.click();
+
+          a.remove();
+
+        } catch (error) {
+
+          console.error(
+            "ERROR AL DESCARGAR DOCUMENTO:",
+            error
+          );
+
+          toast(
+            "No se pudo descargar el documento"
+          );
+
+        }
+
+      };
+
+    }
+
+  }, 0);
 }
 
 /* =========================================================
@@ -416,7 +562,9 @@ function documentInfo(p) {
 const loginForm = $("#loginForm");
 
 if (loginForm) {
+
   loginForm.onsubmit = async e => {
+
     e.preventDefault();
 
     const username =
@@ -426,6 +574,7 @@ if (loginForm) {
       $("#pass")?.value || "";
 
     if (!username || !password) {
+
       toast(
         "Ingresa usuario y contraseña"
       );
@@ -434,24 +583,31 @@ if (loginForm) {
     }
 
     try {
-      const d = await api(
-        "/login",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            username,
-            password
-          })
-        }
-      );
+
+      const d =
+        await api(
+          "/login",
+          {
+            method:"POST",
+
+            body:
+              JSON.stringify({
+                username,
+                password
+              })
+          }
+        );
 
       if (!d.token) {
+
         throw Error(
           "El servidor no devolvió el token de acceso"
         );
+
       }
 
-      token = d.token;
+      token =
+        d.token;
 
       localStorage.setItem(
         "token",
@@ -461,13 +617,16 @@ if (loginForm) {
       showApp();
 
       if ($("#sideName")) {
+
         $("#sideName").textContent =
           d.user?.name ||
           d.user?.username ||
           username;
+
       }
 
       await loadDashboard();
+
       await loadNotifications();
 
       setInterval(
@@ -476,6 +635,7 @@ if (loginForm) {
       );
 
     } catch (x) {
+
       console.error(
         "ERROR LOGIN:",
         x
@@ -485,20 +645,26 @@ if (loginForm) {
         x.message ||
         "No se pudo iniciar sesión"
       );
+
     }
+
   };
+
 }
 
 if ($("#logout")) {
-  $("#logout").onclick = logout;
+  $("#logout").onclick =
+    logout;
 }
 
 if ($("#openLogin")) {
-  $("#openLogin").onclick = showLogin;
+  $("#openLogin").onclick =
+    showLogin;
 }
 
 if ($("#openLogin2")) {
-  $("#openLogin2").onclick = showLogin;
+  $("#openLogin2").onclick =
+    showLogin;
 }
 
 /* =========================================================
@@ -506,20 +672,37 @@ if ($("#openLogin2")) {
 ========================================================= */
 
 $$(".nav").forEach(b => {
+
   b.onclick = () => {
+
     $$(".nav").forEach(
       x =>
-        x.classList.remove("active")
+        x.classList.remove(
+          "active"
+        )
     );
 
-    b.classList.add("active");
+    b.classList.add(
+      "active"
+    );
 
     const pages = {
-      dashboard: loadDashboard,
-      workers: loadWorkers,
-      permissions: loadPermissions,
-      attendance: loadAttendance,
-      reports: loadReports
+
+      dashboard:
+        loadDashboard,
+
+      workers:
+        loadWorkers,
+
+      permissions:
+        loadPermissions,
+
+      attendance:
+        loadAttendance,
+
+      reports:
+        loadReports
+
     };
 
     const fn =
@@ -528,7 +711,9 @@ $$(".nav").forEach(b => {
     if (fn) {
       fn();
     }
+
   };
+
 });
 
 /* =========================================================
@@ -536,15 +721,17 @@ $$(".nav").forEach(b => {
 ========================================================= */
 
 if ($("#todayLabel")) {
+
   $("#todayLabel").textContent =
     new Date().toLocaleDateString(
       "es-PE",
       {
-        weekday: "long",
-        day: "2-digit",
-        month: "long"
+        weekday:"long",
+        day:"2-digit",
+        month:"long"
       }
     );
+
 }
 
 /* =========================================================
@@ -552,22 +739,30 @@ if ($("#todayLabel")) {
 ========================================================= */
 
 if (token) {
+
   showApp();
 
   api("/me")
     .then(d => {
+
       if ($("#sideName")) {
+
         $("#sideName").textContent =
           d.name ||
           d.username ||
           "Administrador";
+
       }
+
     })
     .catch(() => {
+
       logout();
+
     });
 
   loadDashboard();
+
   loadNotifications();
 
   setInterval(
@@ -576,7 +771,9 @@ if (token) {
   );
 
 } else {
+
   showLanding();
+
 }
 
 /* =========================================================
@@ -588,12 +785,16 @@ function layout(
   sub,
   actions = ""
 ) {
+
   if ($("#pageTitle")) {
+
     $("#pageTitle").textContent =
       title;
+
   }
 
   return `
+
     <div class="page-head">
 
       <div>
@@ -613,7 +814,9 @@ function layout(
       </div>
 
     </div>
+
   `;
+
 }
 
 /* =========================================================
@@ -621,9 +824,13 @@ function layout(
 ========================================================= */
 
 async function loadDashboard() {
+
   try {
+
     const d =
-      await api("/dashboard");
+      await api(
+        "/dashboard"
+      );
 
     const byType =
       Array.isArray(d.byType)
@@ -636,6 +843,7 @@ async function loadDashboard() {
         : [];
 
     $("#content").innerHTML =
+
       layout(
         "Resumen general",
         "Indicadores del entorno empresarial"
@@ -644,6 +852,7 @@ async function loadDashboard() {
       +
 
 `
+
 <div class="stats">
 
 <div class="stat">
@@ -792,9 +1001,11 @@ ${x.total}
     :
 
 `
+
 <div class="empty">
 Aún no hay permisos registrados.
 </div>
+
 `
 }
 
@@ -880,6 +1091,7 @@ ${
   ranking.length
     ?
 `
+
 <div
 class="table-wrap"
 style="border:0"
@@ -951,32 +1163,41 @@ ${x.total}
 </table>
 
 </div>
+
 `
 
     :
 
 `
+
 <div class="empty">
 
 Agrega trabajadores y permisos
 para ver estadísticas.
 
 </div>
+
 `
 
 }
 
 </div>
+
 `;
 
   } catch (e) {
+
     console.error(
       "DASHBOARD:",
       e
     );
 
-    toast(e.message);
+    toast(
+      e.message
+    );
+
   }
+
 }
 
 /* =========================================================
@@ -984,33 +1205,43 @@ para ver estadísticas.
 ========================================================= */
 
 async function loadWorkers() {
+
   try {
+
     const data =
-      await api("/workers");
+      await api(
+        "/workers"
+      );
 
     const rows =
-      Array.isArray(data.workers)
+      Array.isArray(
+        data.workers
+      )
         ? data.workers
         : [];
 
     $("#content").innerHTML =
+
       layout(
         "Trabajadores",
         "Registro y administración del personal",
 
         `
+
         <button
           class="primary"
           onclick="workerForm()"
         >
           + Nuevo trabajador
         </button>
+
         `
       )
 
       +
 
 `
+
 <div class="toolbar">
 
 <input
@@ -1077,14 +1308,18 @@ ${workerRows(rows)}
 </table>
 
 </div>
+
 `;
 
   } catch (e) {
+
     toast(
       e.message ||
       "No se pudieron cargar los trabajadores"
     );
+
   }
+
 }
 
 /* =========================================================
@@ -1092,8 +1327,11 @@ ${workerRows(rows)}
 ========================================================= */
 
 function workerRows(rows) {
+
   return rows.length
+
     ?
+
     rows.map(w => {
 
       const status =
@@ -1188,6 +1426,7 @@ Eliminar
     :
 
 `
+
 <tr>
 
 <td colspan="8">
@@ -1201,7 +1440,9 @@ No hay trabajadores registrados.
 </td>
 
 </tr>
+
 `;
+
 }
 
 /* =========================================================
@@ -1209,7 +1450,9 @@ No hay trabajadores registrados.
 ========================================================= */
 
 async function filterWorkers() {
+
   try {
+
     const search =
       $("#workerSearch")?.value || "";
 
@@ -1220,7 +1463,9 @@ async function filterWorkers() {
       );
 
     const rows =
-      Array.isArray(data.workers)
+      Array.isArray(
+        data.workers
+      )
         ? data.workers
         : [];
 
@@ -1228,11 +1473,14 @@ async function filterWorkers() {
       workerRows(rows);
 
   } catch (e) {
+
     toast(
       e.message ||
       "No se pudo realizar la búsqueda"
     );
+
   }
+
 }
 
 /* =========================================================
@@ -1240,6 +1488,7 @@ async function filterWorkers() {
 ========================================================= */
 
 async function deleteWorker(id) {
+
   const confirmar =
     confirm(
       "¿Estás seguro de que deseas eliminar este trabajador?\n\n" +
@@ -1249,10 +1498,11 @@ async function deleteWorker(id) {
   if (!confirmar) return;
 
   try {
+
     await api(
       "/workers/" + id,
       {
-        method: "DELETE"
+        method:"DELETE"
       }
     );
 
@@ -1260,15 +1510,17 @@ async function deleteWorker(id) {
       "Trabajador eliminado correctamente"
     );
 
-    /* SE QUEDA EN TRABAJADORES */
     await loadWorkers();
 
   } catch (e) {
+
     toast(
       e.message ||
       "No se pudo eliminar el trabajador"
     );
+
   }
+
 }
 
 /* =========================================================
@@ -1276,6 +1528,7 @@ async function deleteWorker(id) {
 ========================================================= */
 
 async function activateWorker(id) {
+
   const confirmar =
     confirm(
       "¿Deseas volver a activar este trabajador?"
@@ -1284,13 +1537,16 @@ async function activateWorker(id) {
   if (!confirmar) return;
 
   try {
+
     await api(
       "/workers/" + id,
       {
-        method: "PUT",
-        body: JSON.stringify({
-          status: "Activo"
-        })
+        method:"PUT",
+
+        body:
+          JSON.stringify({
+            status:"Activo"
+          })
       }
     );
 
@@ -1298,15 +1554,17 @@ async function activateWorker(id) {
       "Trabajador activado correctamente"
     );
 
-    /* SE QUEDA EN TRABAJADORES */
     await loadWorkers();
 
   } catch (e) {
+
     toast(
       e.message ||
       "No se pudo activar el trabajador"
     );
+
   }
+
 }
 
 /* =========================================================
@@ -1314,6 +1572,7 @@ async function activateWorker(id) {
 ========================================================= */
 
 function workerForm(w = {}) {
+
   openModal(`
 
 <h3 class="modal-title">
@@ -1500,6 +1759,7 @@ Guardar trabajador
 
   $("#workerForm").onsubmit =
     async e => {
+
       e.preventDefault();
 
       const o =
@@ -1508,6 +1768,7 @@ Guardar trabajador
         );
 
       try {
+
         await api(
           w.id
             ? "/workers/" + w.id
@@ -1530,13 +1791,18 @@ Guardar trabajador
           "Trabajador guardado correctamente"
         );
 
-        /* SE QUEDA EN TRABAJADORES */
         await loadWorkers();
 
       } catch (x) {
-        toast(x.message);
+
+        toast(
+          x.message
+        );
+
       }
+
     };
+
 }
 
 /* =========================================================
@@ -1544,7 +1810,9 @@ Guardar trabajador
 ========================================================= */
 
 async function workerHistory(id) {
+
   try {
+
     const d =
       await api(
         "/workers/" +
@@ -1577,7 +1845,9 @@ margin:auto
 "
 >
 
-${initials(d.worker.names)}
+${initials(
+  d.worker.names
+)}
 
 </div>
 
@@ -1589,7 +1859,9 @@ margin:12px 0 0
 "
 >
 
-${esc(d.worker.names)}
+${esc(
+  d.worker.names
+)}
 
 </h4>
 
@@ -1602,7 +1874,9 @@ font-size:12px
 "
 >
 
-${esc(d.worker.position || "")}
+${esc(
+  d.worker.position || ""
+)}
 
 </p>
 
@@ -1648,7 +1922,9 @@ ${d.attendance.length}
 </small>
 
 <b>
-${esc(d.worker.area || "-")}
+${esc(
+  d.worker.area || "-"
+)}
 </b>
 
 </div>
@@ -1713,12 +1989,16 @@ Sin registros.
 </div>
 
 `);
+
   } catch (e) {
+
     toast(
       e.message ||
       "No se pudo cargar el historial"
     );
+
   }
+
 }
 
 /* =========================================================
@@ -1726,41 +2006,55 @@ Sin registros.
 ========================================================= */
 
 async function loadPermissions() {
+
   try {
+
     const data =
-      await api("/permissions");
+      await api(
+        "/permissions"
+      );
 
     const rows =
-      Array.isArray(data.permissions)
+      Array.isArray(
+        data.permissions
+      )
         ? data.permissions
         : [];
 
     const workersData =
-      await api("/workers");
+      await api(
+        "/workers"
+      );
 
     const workers =
-      Array.isArray(workersData.workers)
+      Array.isArray(
+        workersData.workers
+      )
         ? workersData.workers
         : [];
 
     $("#content").innerHTML =
+
       layout(
         "Permisos y salidas",
         "Solicitudes, autorizaciones y control de salidas",
 
         `
+
         <button
         class="primary"
         onclick="permissionForm()"
         >
         + Registrar permiso
         </button>
+
         `
       )
 
       +
 
 `
+
 <div class="toolbar">
 
 <input
@@ -1895,21 +2189,28 @@ Acciones
 
 <tbody id="permissionRows">
 
-${permissionRows(rows, workers)}
+${permissionRows(
+  rows,
+  workers
+)}
 
 </tbody>
 
 </table>
 
 </div>
+
 `;
 
   } catch (e) {
+
     toast(
       e.message ||
       "No se pudieron cargar los permisos"
     );
+
   }
+
 }
 
 /* =========================================================
@@ -1920,10 +2221,12 @@ function getWorkerForPermission(
   p,
   workers = []
 ) {
+
   if (
     p.worker_id !== undefined &&
     p.worker_id !== null
   ) {
+
     const byId =
       workers.find(
         w =>
@@ -1934,22 +2237,29 @@ function getWorkerForPermission(
     if (byId) {
       return byId;
     }
+
   }
 
   if (p.dni) {
+
     const dniPermiso =
-      String(p.dni).trim();
+      String(
+        p.dni
+      ).trim();
 
     const byDni =
       workers.find(
         w =>
-          String(w.dni || "").trim() ===
+          String(
+            w.dni || ""
+          ).trim() ===
           dniPermiso
       );
 
     if (byDni) {
       return byDni;
     }
+
   }
 
   return null;
@@ -1963,8 +2273,11 @@ function permissionRows(
   rows,
   workers = []
 ) {
+
   return rows.length
+
     ?
+
     rows.map(p => {
 
       const worker =
@@ -2060,7 +2373,9 @@ ${badge(p.status)}
 
 ${
   p.status === "Pendiente"
+
     ?
+
 `
 <button
 class="primary"
@@ -2077,8 +2392,8 @@ Revisar
 class="secondary"
 onclick='permissionDetail(${JSON.stringify({
   ...p,
-  names: workerName,
-  dni: workerDni
+  names:workerName,
+  dni:workerDni
 }).replace(/'/g, "&#039;")}'
 >
 Ver
@@ -2105,6 +2420,7 @@ title="Eliminar permiso"
     :
 
 `
+
 <tr>
 
 <td colspan="8">
@@ -2118,7 +2434,9 @@ No hay permisos registrados.
 </td>
 
 </tr>
+
 `;
+
 }
 
 /* =========================================================
@@ -2126,6 +2444,7 @@ No hay permisos registrados.
 ========================================================= */
 
 async function deletePermission(id) {
+
   const confirmar =
     confirm(
       "¿Estás seguro de que deseas eliminar este registro de permiso?\n\n" +
@@ -2135,10 +2454,12 @@ async function deletePermission(id) {
   if (!confirmar) return;
 
   try {
+
     await api(
-      "/permissions/" + id,
+      "/permissions/" +
+      id,
       {
-        method: "DELETE"
+        method:"DELETE"
       }
     );
 
@@ -2146,16 +2467,19 @@ async function deletePermission(id) {
       "Permiso eliminado correctamente"
     );
 
-    /* SE QUEDA EN PERMISOS */
     await loadPermissions();
+
     await loadNotifications();
 
   } catch (e) {
+
     toast(
       e.message ||
       "No se pudo eliminar el permiso"
     );
+
   }
+
 }
 
 /* =========================================================
@@ -2163,7 +2487,9 @@ async function deletePermission(id) {
 ========================================================= */
 
 async function filterPermissions() {
+
   try {
+
     const search =
       $("#psearch")?.value || "";
 
@@ -2185,15 +2511,21 @@ async function filterPermissions() {
       await api(u);
 
     const rows =
-      Array.isArray(data.permissions)
+      Array.isArray(
+        data.permissions
+      )
         ? data.permissions
         : [];
 
     const workersData =
-      await api("/workers");
+      await api(
+        "/workers"
+      );
 
     const workers =
-      Array.isArray(workersData.workers)
+      Array.isArray(
+        workersData.workers
+      )
         ? workersData.workers
         : [];
 
@@ -2204,11 +2536,14 @@ async function filterPermissions() {
       );
 
   } catch (e) {
+
     toast(
       e.message ||
       "No se pudieron filtrar los permisos"
     );
+
   }
+
 }
 
 /* =========================================================
@@ -2216,18 +2551,24 @@ async function filterPermissions() {
 ========================================================= */
 
 async function permissionForm() {
+
   const data =
-    await api("/workers");
+    await api(
+      "/workers"
+    );
 
   const ws =
-    Array.isArray(data.workers)
+    Array.isArray(
+      data.workers
+    )
       ? data.workers
       : [];
 
   const active =
     ws.filter(
       w =>
-        w.status !== "Inactivo"
+        w.status !==
+        "Inactivo"
     );
 
   openModal(`
@@ -2265,7 +2606,9 @@ Seleccionar trabajador
 ${active.map(
   w => `
 
-<option value="${w.id}">
+<option
+value="${w.id}"
+>
 
 ${esc(w.names)}
 
@@ -2446,18 +2789,22 @@ Registrar
 
   $("#permissionForm").onsubmit =
     async e => {
+
       e.preventDefault();
 
       try {
+
         await api(
           "/permissions",
           {
-            method: "POST",
+            method:"POST",
 
             body:
               JSON.stringify(
                 Object.fromEntries(
-                  new FormData(e.target)
+                  new FormData(
+                    e.target
+                  )
                 )
               )
           }
@@ -2469,14 +2816,20 @@ Registrar
           "Permiso registrado"
         );
 
-        /* SE QUEDA EN PERMISOS */
         await loadPermissions();
+
         await loadNotifications();
 
       } catch (x) {
-        toast(x.message);
+
+        toast(
+          x.message
+        );
+
       }
+
     };
+
 }
 
 /* =========================================================
@@ -2484,9 +2837,13 @@ Registrar
 ========================================================= */
 
 async function loadNotifications() {
+
   try {
+
     const d =
-      await api("/notifications");
+      await api(
+        "/notifications"
+      );
 
     const b =
       $("#pendingCount");
@@ -2502,28 +2859,41 @@ async function loadNotifications() {
     );
 
   } catch (e) {
+
     console.error(
       "NOTIFICACIONES:",
       e
     );
+
   }
+
 }
 
 async function showNotifications() {
+
   try {
+
     const d =
-      await api("/notifications");
+      await api(
+        "/notifications"
+      );
 
     const latest =
-      Array.isArray(d.latest)
+      Array.isArray(
+        d.latest
+      )
         ? d.latest
         : [];
 
     const workersData =
-      await api("/workers");
+      await api(
+        "/workers"
+      );
 
     const workers =
-      Array.isArray(workersData.workers)
+      Array.isArray(
+        workersData.workers
+      )
         ? workersData.workers
         : [];
 
@@ -2539,6 +2909,7 @@ async function showNotifications() {
 ${
   latest.length
     ?
+
     latest.map(x => {
 
       const worker =
@@ -2632,11 +3003,14 @@ Ver todos los permisos
 `);
 
   } catch (e) {
+
     toast(
       e.message ||
       "No se pudieron cargar las notificaciones"
     );
+
   }
+
 }
 
 /* =========================================================
@@ -2644,12 +3018,18 @@ Ver todos los permisos
 ========================================================= */
 
 async function reviewPermission(id) {
+
   try {
+
     const data =
-      await api("/permissions");
+      await api(
+        "/permissions"
+      );
 
     const rows =
-      Array.isArray(data.permissions)
+      Array.isArray(
+        data.permissions
+      )
         ? data.permissions
         : [];
 
@@ -2661,16 +3041,22 @@ async function reviewPermission(id) {
       );
 
     if (!p) {
+
       return toast(
         "No se encontró la solicitud"
       );
+
     }
 
     const workersData =
-      await api("/workers");
+      await api(
+        "/workers"
+      );
 
     const workers =
-      Array.isArray(workersData.workers)
+      Array.isArray(
+        workersData.workers
+      )
         ? workersData.workers
         : [];
 
@@ -2709,7 +3095,9 @@ Revisar solicitud de permiso
 
 <span class="avatar">
 
-${initials(workerName)}
+${initials(
+  workerName
+)}
 
 </span>
 
@@ -2718,14 +3106,18 @@ ${initials(workerName)}
 
 <b>
 
-${esc(workerName)}
+${esc(
+  workerName
+)}
 
 </b>
 
 
 <small>
 
-${esc(workerDni)}
+${esc(
+  workerDni
+)}
 
 ·
 
@@ -2750,7 +3142,9 @@ ${esc(
 </div>
 
 
-${badge(p.status)}
+${badge(
+  p.status
+)}
 
 
 </div>
@@ -2796,11 +3190,15 @@ Horario
 
 <b>
 
-${esc(p.exit_time || "-")}
+${esc(
+  p.exit_time || "-"
+)}
 
 -
 
-${esc(p.return_time || "-")}
+${esc(
+  p.return_time || "-"
+)}
 
 </b>
 
@@ -2862,10 +3260,13 @@ ${documentInfo(p)}
 
 
 ${
-  p.status === "Pendiente"
+  p.status ===
+  "Pendiente"
+
     ?
 
 `
+
 <div class="decision-box">
 
 <label>
@@ -2953,11 +3354,14 @@ Cerrar
 `);
 
   } catch (e) {
+
     toast(
       e.message ||
       "No se pudo abrir la solicitud"
     );
+
   }
+
 }
 
 /* =========================================================
@@ -2968,14 +3372,17 @@ async function decidePermission(
   id,
   status
 ) {
+
   const reason =
     $("#decisionReason")?.value ||
     "";
 
   if (
-    status === "Rechazado" &&
+    status ===
+    "Rechazado" &&
     !reason.trim()
   ) {
+
     toast(
       "Escribe el motivo del rechazo"
     );
@@ -2985,21 +3392,27 @@ async function decidePermission(
 
   if (
     !confirm(
-      status === "Aprobado"
-        ? "¿Confirmas que deseas APROBAR esta solicitud?"
-        : "¿Confirmas que deseas RECHAZAR esta solicitud?"
+      status ===
+      "Aprobado"
+        ?
+        "¿Confirmas que deseas APROBAR esta solicitud?"
+        :
+        "¿Confirmas que deseas RECHAZAR esta solicitud?"
     )
   ) {
+
     return;
+
   }
 
   try {
+
     await api(
       "/permissions/" +
       id +
       "/status",
       {
-        method: "PUT",
+        method:"PUT",
 
         body:
           JSON.stringify({
@@ -3012,39 +3425,51 @@ async function decidePermission(
     closeModal();
 
     toast(
-      status === "Aprobado"
-        ? "Permiso aprobado correctamente"
-        : "Permiso rechazado"
+      status ===
+      "Aprobado"
+        ?
+        "Permiso aprobado correctamente"
+        :
+        "Permiso rechazado"
     );
 
-    /* SE QUEDA EN PERMISOS */
     await loadNotifications();
+
     await loadPermissions();
 
   } catch (e) {
-    toast(e.message);
+
+    toast(
+      e.message
+    );
+
   }
+
 }
 
 async function setPermission(
   id,
   status
 ) {
+
   if (
     !confirm(
       `¿Deseas marcar este permiso como ${status}?`
     )
   ) {
+
     return;
+
   }
 
   try {
+
     await api(
       "/permissions/" +
       id +
       "/status",
       {
-        method: "PUT",
+        method:"PUT",
 
         body:
           JSON.stringify({
@@ -3057,13 +3482,18 @@ async function setPermission(
       "Estado actualizado"
     );
 
-    /* SE QUEDA EN PERMISOS */
     await loadPermissions();
+
     await loadNotifications();
 
   } catch (e) {
-    toast(e.message);
+
+    toast(
+      e.message
+    );
+
   }
+
 }
 
 /* =========================================================
@@ -3071,6 +3501,7 @@ async function setPermission(
 ========================================================= */
 
 function permissionDetail(p) {
+
   openModal(`
 
 <h3 class="modal-title">
@@ -3162,7 +3593,9 @@ Salida
 </small>
 
 <b>
-${esc(p.exit_time || "-")}
+${esc(
+  p.exit_time || "-"
+)}
 </b>
 
 </div>
@@ -3175,7 +3608,9 @@ Retorno
 </small>
 
 <b>
-${esc(p.return_time || "-")}
+${esc(
+  p.return_time || "-"
+)}
 </b>
 
 </div>
@@ -3197,7 +3632,9 @@ Motivo
 </span>
 
 <b>
-${esc(p.reason || "-")}
+${esc(
+  p.reason || "-"
+)}
 </b>
 
 </div>
@@ -3210,7 +3647,9 @@ Observación
 </span>
 
 <b>
-${esc(p.observation || "-")}
+${esc(
+  p.observation || "-"
+)}
 </b>
 
 </div>
@@ -3223,7 +3662,9 @@ Autorizó
 </span>
 
 <b>
-${esc(p.approved_by || "-")}
+${esc(
+  p.approved_by || "-"
+)}
 </b>
 
 </div>
@@ -3236,7 +3677,9 @@ Comentario de decisión
 </span>
 
 <b>
-${esc(p.decision_reason || "-")}
+${esc(
+  p.decision_reason || "-"
+)}
 </b>
 
 </div>
@@ -3261,6 +3704,7 @@ ${documentInfo(p)}
 </div>
 
 `);
+
 }
 
 /* =========================================================
@@ -3268,7 +3712,9 @@ ${documentInfo(p)}
 ========================================================= */
 
 async function loadAttendance() {
+
   try {
+
     const data =
       await api(
         "/attendance?date=" +
@@ -3276,30 +3722,36 @@ async function loadAttendance() {
       );
 
     const rows =
-      Array.isArray(data.attendance)
+      Array.isArray(
+        data.attendance
+      )
         ? data.attendance
         : Array.isArray(data)
         ? data
         : [];
 
     $("#content").innerHTML =
+
       layout(
         "Asistencia",
         "Control diario de entradas, salidas y tardanzas",
 
         `
+
         <button
         class="primary"
         onclick="attendanceForm()"
         >
         + Registrar asistencia
         </button>
+
         `
       )
 
       +
 
 `
+
 <div class="toolbar">
 
 <input
@@ -3366,16 +3818,22 @@ ${attendanceRows(rows)}
 `;
 
   } catch (e) {
+
     toast(
       e.message ||
       "No se pudo cargar la asistencia"
     );
+
   }
+
 }
 
 function attendanceRows(rows) {
+
   return rows.length
+
     ?
+
     rows.map(
       a => `
 
@@ -3395,7 +3853,9 @@ color:#8993a2
 "
 >
 
-${esc(a.area || "")}
+${esc(
+  a.area || ""
+)}
 
 </small>
 
@@ -3408,12 +3868,16 @@ ${esc(a.date)}
 
 
 <td>
-${esc(a.entry_time || "-")}
+${esc(
+  a.entry_time || "-"
+)}
 </td>
 
 
 <td>
-${esc(a.exit_time || "-")}
+${esc(
+  a.exit_time || "-"
+)}
 </td>
 
 
@@ -3428,7 +3892,9 @@ ${a.late_minutes || 0} min
 
 
 <td>
-${esc(a.observation || "-")}
+${esc(
+  a.observation || "-"
+)}
 </td>
 
 
@@ -3440,6 +3906,7 @@ ${esc(a.observation || "-")}
     :
 
 `
+
 <tr>
 
 <td colspan="7">
@@ -3453,11 +3920,15 @@ No hay registros para esta fecha.
 </td>
 
 </tr>
+
 `;
+
 }
 
 async function refreshAttendance() {
+
   try {
+
     const data =
       await api(
         "/attendance?date=" +
@@ -3465,7 +3936,9 @@ async function refreshAttendance() {
       );
 
     const rows =
-      Array.isArray(data.attendance)
+      Array.isArray(
+        data.attendance
+      )
         ? data.attendance
         : Array.isArray(data)
         ? data
@@ -3475,11 +3948,14 @@ async function refreshAttendance() {
       attendanceRows(rows);
 
   } catch (e) {
+
     toast(
       e.message ||
       "No se pudo actualizar la asistencia"
     );
+
   }
+
 }
 
 /* =========================================================
@@ -3487,11 +3963,16 @@ async function refreshAttendance() {
 ========================================================= */
 
 async function attendanceForm() {
+
   const data =
-    await api("/workers");
+    await api(
+      "/workers"
+    );
 
   const ws =
-    Array.isArray(data.workers)
+    Array.isArray(
+      data.workers
+    )
       ? data.workers
       : [];
 
@@ -3527,7 +4008,8 @@ ${
   ws
     .filter(
       w =>
-        w.status !== "Inactivo"
+        w.status !==
+        "Inactivo"
     )
     .map(
       w => `
@@ -3695,18 +4177,22 @@ Guardar
 
   $("#attendanceForm").onsubmit =
     async e => {
+
       e.preventDefault();
 
       try {
+
         await api(
           "/attendance",
           {
-            method: "POST",
+            method:"POST",
 
             body:
               JSON.stringify(
                 Object.fromEntries(
-                  new FormData(e.target)
+                  new FormData(
+                    e.target
+                  )
                 )
               )
           }
@@ -3718,13 +4204,18 @@ Guardar
           "Asistencia guardada"
         );
 
-        /* SE QUEDA EN ASISTENCIA */
         await loadAttendance();
 
       } catch (x) {
-        toast(x.message);
+
+        toast(
+          x.message
+        );
+
       }
+
     };
+
 }
 
 /* =========================================================
@@ -3732,12 +4223,16 @@ Guardar
 ========================================================= */
 
 function loadReports() {
+
   if ($("#pageTitle")) {
+
     $("#pageTitle").textContent =
       "Reportes";
+
   }
 
   $("#content").innerHTML =
+
     layout(
       "Reportes",
       "Exporta información para control administrativo"
@@ -3746,6 +4241,7 @@ function loadReports() {
     +
 
 `
+
 <div class="grid2">
 
 
@@ -3853,7 +4349,9 @@ Dashboard
 
 
 </div>
+
 `;
+
 }
 
 /* =========================================================
@@ -3861,7 +4359,9 @@ Dashboard
 ========================================================= */
 
 async function downloadReport(type) {
+
   try {
+
     const b =
       await api(
         "/reports/" +
@@ -3869,19 +4369,26 @@ async function downloadReport(type) {
       );
 
     const url =
-      URL.createObjectURL(b);
+      URL.createObjectURL(
+        b
+      );
 
     const a =
-      document.createElement("a");
+      document.createElement(
+        "a"
+      );
 
-    a.href = url;
+    a.href =
+      url;
 
     a.download =
       type === "pdf"
         ? "Reporte_Permisos.pdf"
         : "Reporte_Permisos.xlsx";
 
-    document.body.appendChild(a);
+    document.body.appendChild(
+      a
+    );
 
     a.click();
 
@@ -3889,14 +4396,20 @@ async function downloadReport(type) {
 
     setTimeout(
       () =>
-        URL.revokeObjectURL(url),
+        URL.revokeObjectURL(
+          url
+        ),
       1000
     );
 
   } catch (e) {
+
     toast(
       e.message ||
       "No se pudo descargar el reporte"
     );
+
   }
+
 }
+
