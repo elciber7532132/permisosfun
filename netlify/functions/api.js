@@ -17,16 +17,6 @@ const DB_FILE =
 |--------------------------------------------------------------------------
 | POSTGRESQL
 |--------------------------------------------------------------------------
-| Render debe tener:
-|
-| DATABASE_URL = Internal Database URL
-|
-| La aplicación utiliza un schema exclusivo:
-|
-| permisosfun
-|
-| para no tocar las tablas de otros sistemas.
-|--------------------------------------------------------------------------
 */
 
 const pool = new Pool({
@@ -92,6 +82,68 @@ async function ensurePostgres() {
 
 /*
 |--------------------------------------------------------------------------
+| CREAR ADMINISTRADOR INICIAL
+|--------------------------------------------------------------------------
+| Las credenciales iniciales vienen de Render:
+|
+| INITIAL_ADMIN_USERNAME
+| INITIAL_ADMIN_PASSWORD
+|
+|--------------------------------------------------------------------------
+*/
+
+async function ensureInitialAdmin(db) {
+  if (!Array.isArray(db.admins)) {
+    db.admins = [];
+  }
+
+  if (db.admins.length > 0) {
+    return false;
+  }
+
+  const initialUsername =
+    String(
+      process.env.INITIAL_ADMIN_USERNAME || ''
+    ).trim();
+
+  const initialPassword =
+    String(
+      process.env.INITIAL_ADMIN_PASSWORD || ''
+    );
+
+  if (!initialUsername || !initialPassword) {
+    throw new Error(
+      'No existe un administrador. Configura INITIAL_ADMIN_USERNAME e INITIAL_ADMIN_PASSWORD en las variables de entorno de Render.'
+    );
+  }
+
+  if (initialUsername.length < 4) {
+    throw new Error(
+      'INITIAL_ADMIN_USERNAME debe tener al menos 4 caracteres.'
+    );
+  }
+
+  if (initialPassword.length < 8) {
+    throw new Error(
+      'INITIAL_ADMIN_PASSWORD debe tener al menos 8 caracteres.'
+    );
+  }
+
+  db.admins.push({
+    id: 1,
+    username: initialUsername,
+    password: bcrypt.hashSync(
+      initialPassword,
+      12
+    ),
+    name: 'Administrador',
+  });
+
+  return true;
+}
+
+/*
+|--------------------------------------------------------------------------
 | CARGAR BASE DE DATOS
 |--------------------------------------------------------------------------
 */
@@ -124,6 +176,28 @@ async function loadDB() {
       };
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | SI EXISTE LA BASE PERO NO EXISTE ADMINISTRADOR
+    |--------------------------------------------------------------------------
+    */
+
+    const adminCreated =
+      await ensureInitialAdmin(db);
+
+    if (adminCreated) {
+      await pool.query(
+        `
+        UPDATE permisosfun.app_state
+        SET
+          data = $1::jsonb,
+          updated_at = NOW()
+        WHERE id = 1
+        `,
+        [JSON.stringify(db)]
+      );
+    }
+
     return db;
   }
 
@@ -131,15 +205,16 @@ async function loadDB() {
   |--------------------------------------------------------------------------
   | SI TODAVÍA NO EXISTE INFORMACIÓN EN POSTGRESQL
   |--------------------------------------------------------------------------
-  | Se intenta recuperar el JSON local solamente como migración inicial.
-  |--------------------------------------------------------------------------
   */
 
   let db = null;
 
   try {
     if (fs.existsSync(DB_FILE)) {
-      const raw = fs.readFileSync(DB_FILE, 'utf8');
+      const raw = fs.readFileSync(
+        DB_FILE,
+        'utf8'
+      );
 
       if (raw.trim()) {
         db = JSON.parse(raw);
@@ -177,18 +252,7 @@ async function loadDB() {
   |--------------------------------------------------------------------------
   */
 
-  if (!Array.isArray(db.admins)) {
-    db.admins = [];
-  }
-
-  if (db.admins.length === 0) {
-    db.admins.push({
-      id: 1,
-      username: 'admin',
-      password: bcrypt.hashSync('admin123', 10),
-      name: 'Administrador',
-    });
-  }
+  await ensureInitialAdmin(db);
 
   /*
   |--------------------------------------------------------------------------
@@ -265,14 +329,22 @@ function json(statusCode, body) {
   return {
     statusCode,
     headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-      'Access-Control-Allow-Origin': '*',
+      'Content-Type':
+        'application/json; charset=utf-8',
+
+      'Cache-Control':
+        'no-store',
+
+      'Access-Control-Allow-Origin':
+        '*',
+
       'Access-Control-Allow-Headers':
         'Content-Type, Authorization',
+
       'Access-Control-Allow-Methods':
         'GET, POST, PUT, DELETE, OPTIONS',
     },
+
     body: JSON.stringify(body),
   };
 }
@@ -284,14 +356,19 @@ function json(statusCode, body) {
 */
 
 function auth(event) {
-  const headers = event.headers || {};
+  const headers =
+    event.headers || {};
 
   const authorization =
     headers.authorization ||
     headers.Authorization ||
     '';
 
-  if (!authorization.startsWith('Bearer ')) {
+  if (
+    !authorization.startsWith(
+      'Bearer '
+    )
+  ) {
     return {
       error: json(401, {
         error: 'No autorizado',
@@ -299,10 +376,15 @@ function auth(event) {
     };
   }
 
-  const token = authorization.substring(7);
+  const token =
+    authorization.substring(7);
 
   try {
-    const user = jwt.verify(token, SECRET);
+    const user =
+      jwt.verify(
+        token,
+        SECRET
+      );
 
     return {
       user,
@@ -310,7 +392,8 @@ function auth(event) {
   } catch (error) {
     return {
       error: json(401, {
-        error: 'Sesión expirada',
+        error:
+          'Sesión expirada',
       }),
     };
   }
@@ -326,14 +409,24 @@ function parseBody(event) {
   if (!event.body) return {};
 
   try {
-    if (event.isBase64Encoded) {
+    if (
+      event.isBase64Encoded
+    ) {
       return JSON.parse(
-        Buffer.from(event.body, 'base64').toString('utf8')
+        Buffer.from(
+          event.body,
+          'base64'
+        ).toString('utf8')
       );
     }
 
-    if (typeof event.body === 'string') {
-      return JSON.parse(event.body);
+    if (
+      typeof event.body ===
+      'string'
+    ) {
+      return JSON.parse(
+        event.body
+      );
     }
 
     return event.body;
@@ -351,13 +444,22 @@ function parseBody(event) {
 function qDate(value) {
   if (!value) return '';
 
-  const d = new Date(value);
+  const d =
+    new Date(value);
 
-  if (Number.isNaN(d.getTime())) {
-    return String(value).slice(0, 10);
+  if (
+    Number.isNaN(
+      d.getTime()
+    )
+  ) {
+    return String(
+      value
+    ).slice(0, 10);
   }
 
-  return d.toISOString().slice(0, 10);
+  return d
+    .toISOString()
+    .slice(0, 10);
 }
 
 /*
@@ -367,7 +469,8 @@ function qDate(value) {
 */
 
 function nowISO() {
-  return new Date().toISOString();
+  return new Date()
+    .toISOString();
 }
 
 /*
@@ -385,13 +488,19 @@ function validateDocument(x) {
     };
   }
 
-  if (typeof x !== 'string') {
-    throw new Error('Documento inválido.');
+  if (
+    typeof x !==
+    'string'
+  ) {
+    throw new Error(
+      'Documento inválido.'
+    );
   }
 
-  const match = x.match(
-    /^data:(image\/jpeg|image\/png|application\/pdf);base64,(.+)$/s
-  );
+  const match =
+    x.match(
+      /^data:(image\/jpeg|image\/png|application\/pdf);base64,(.+)$/s
+    );
 
   if (!match) {
     throw new Error(
@@ -399,12 +508,22 @@ function validateDocument(x) {
     );
   }
 
-  const mime = match[1];
-  const base64 = match[2];
+  const mime =
+    match[1];
 
-  const buffer = Buffer.from(base64, 'base64');
+  const base64 =
+    match[2];
 
-  if (buffer.length > 4 * 1024 * 1024) {
+  const buffer =
+    Buffer.from(
+      base64,
+      'base64'
+    );
+
+  if (
+    buffer.length >
+    4 * 1024 * 1024
+  ) {
     throw new Error(
       'El documento no puede superar los 4 MB.'
     );
@@ -423,31 +542,48 @@ function validateDocument(x) {
 |--------------------------------------------------------------------------
 */
 
-function enrichPermission(permission, db) {
-  const worker = db.workers.find(
-    w => Number(w.id) === Number(permission.worker_id)
-  );
+function enrichPermission(
+  permission,
+  db
+) {
+  const worker =
+    db.workers.find(
+      w =>
+        Number(w.id) ===
+        Number(
+          permission.worker_id
+        )
+    );
 
   return {
     ...permission,
 
-    worker: worker || null,
+    worker:
+      worker || null,
 
-    worker_name: worker
-      ? worker.names || worker.name || ''
-      : '',
+    worker_name:
+      worker
+        ? worker.names ||
+          worker.name ||
+          ''
+        : '',
 
-    worker_dni: worker
-      ? worker.dni || ''
-      : '',
+    worker_dni:
+      worker
+        ? worker.dni || ''
+        : '',
 
-    worker_area: worker
-      ? worker.area || ''
-      : '',
+    worker_area:
+      worker
+        ? worker.area || ''
+        : '',
 
-    worker_position: worker
-      ? worker.position || worker.cargo || ''
-      : '',
+    worker_position:
+      worker
+        ? worker.position ||
+          worker.cargo ||
+          ''
+        : '',
   };
 }
 
@@ -457,12 +593,16 @@ function enrichPermission(permission, db) {
 |--------------------------------------------------------------------------
 */
 
-async function reportExcel(db) {
-  const workbook = new ExcelJS.Workbook();
+async function reportExcel(
+  db
+) {
+  const workbook =
+    new ExcelJS.Workbook();
 
-  const sheet = workbook.addWorksheet(
-    'Solicitudes'
-  );
+  const sheet =
+    workbook.addWorksheet(
+      'Solicitudes'
+    );
 
   sheet.columns = [
     {
@@ -532,35 +672,67 @@ async function reportExcel(db) {
     },
   ];
 
-  for (const p of db.permissions) {
-    const worker = db.workers.find(
-      w => Number(w.id) === Number(p.worker_id)
-    );
+  for (
+    const p of db.permissions
+  ) {
+    const worker =
+      db.workers.find(
+        w =>
+          Number(w.id) ===
+          Number(
+            p.worker_id
+          )
+      );
 
     sheet.addRow({
       id: p.id,
-      dni: worker?.dni || '',
+
+      dni:
+        worker?.dni || '',
+
       worker:
         worker?.names ||
         worker?.name ||
         '',
-      area: worker?.area || '',
+
+      area:
+        worker?.area || '',
+
       position:
         worker?.position ||
         worker?.cargo ||
         '',
-      type: p.type || '',
-      date: p.date || '',
-      exit_time: p.exit_time || '',
-      return_time: p.return_time || '',
-      reason: p.reason || '',
-      observation: p.observation || '',
-      status: p.status || '',
-      created_at: p.created_at || '',
+
+      type:
+        p.type || '',
+
+      date:
+        p.date || '',
+
+      exit_time:
+        p.exit_time || '',
+
+      return_time:
+        p.return_time ||
+        '',
+
+      reason:
+        p.reason || '',
+
+      observation:
+        p.observation ||
+        '',
+
+      status:
+        p.status || '',
+
+      created_at:
+        p.created_at || '',
     });
   }
 
-  return workbook.xlsx.writeBuffer();
+  return workbook.xlsx
+    .writeBuffer();
 }
 
 /*
@@ -570,120 +742,159 @@ async function reportExcel(db) {
 */
 
 function reportPDF(db) {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({
-      margin: 40,
-      size: 'A4',
-    });
+  return new Promise(
+    (resolve, reject) => {
+      const doc =
+        new PDFDocument({
+          margin: 40,
+          size: 'A4',
+        });
 
-    const chunks = [];
+      const chunks = [];
 
-    doc.on('data', chunk => {
-      chunks.push(chunk);
-    });
-
-    doc.on('end', () => {
-      resolve(Buffer.concat(chunks));
-    });
-
-    doc.on('error', reject);
-
-    doc
-      .fontSize(18)
-      .text(
-        'Reporte de Solicitudes de Permiso',
-        {
-          align: 'center',
+      doc.on(
+        'data',
+        chunk => {
+          chunks.push(
+            chunk
+          );
         }
       );
 
-    doc.moveDown();
+      doc.on(
+        'end',
+        () => {
+          resolve(
+            Buffer.concat(
+              chunks
+            )
+          );
+        }
+      );
 
-    for (const p of db.permissions) {
-      const worker = db.workers.find(
-        w =>
-          Number(w.id) ===
-          Number(p.worker_id)
+      doc.on(
+        'error',
+        reject
       );
 
       doc
-        .fontSize(10)
+        .fontSize(18)
         .text(
-          `Solicitud #${p.id}`
+          'Reporte de Solicitudes de Permiso',
+          {
+            align: 'center',
+          }
         );
 
-      doc.text(
-        `Trabajador: ${
-          worker?.names ||
-          worker?.name ||
-          ''
-        }`
-      );
-
-      doc.text(
-        `DNI: ${
-          worker?.dni || ''
-        }`
-      );
-
-      doc.text(
-        `Área: ${
-          worker?.area || ''
-        }`
-      );
-
-      doc.text(
-        `Cargo: ${
-          worker?.position ||
-          worker?.cargo ||
-          ''
-        }`
-      );
-
-      doc.text(
-        `Tipo: ${p.type || ''}`
-      );
-
-      doc.text(
-        `Fecha: ${p.date || ''}`
-      );
-
-      doc.text(
-        `Salida: ${
-          p.exit_time || ''
-        }`
-      );
-
-      doc.text(
-        `Retorno: ${
-          p.return_time || ''
-        }`
-      );
-
-      doc.text(
-        `Motivo: ${
-          p.reason || ''
-        }`
-      );
-
-      doc.text(
-        `Estado: ${
-          p.status || ''
-        }`
-      );
-
       doc.moveDown();
 
-      doc
-        .moveTo(40, doc.y)
-        .lineTo(555, doc.y)
-        .stroke();
+      for (
+        const p of db.permissions
+      ) {
+        const worker =
+          db.workers.find(
+            w =>
+              Number(
+                w.id
+              ) ===
+              Number(
+                p.worker_id
+              )
+          );
 
-      doc.moveDown();
+        doc
+          .fontSize(10)
+          .text(
+            `Solicitud #${p.id}`
+          );
+
+        doc.text(
+          `Trabajador: ${
+            worker?.names ||
+            worker?.name ||
+            ''
+          }`
+        );
+
+        doc.text(
+          `DNI: ${
+            worker?.dni ||
+            ''
+          }`
+        );
+
+        doc.text(
+          `Área: ${
+            worker?.area ||
+            ''
+          }`
+        );
+
+        doc.text(
+          `Cargo: ${
+            worker?.position ||
+            worker?.cargo ||
+            ''
+          }`
+        );
+
+        doc.text(
+          `Tipo: ${
+            p.type || ''
+          }`
+        );
+
+        doc.text(
+          `Fecha: ${
+            p.date || ''
+          }`
+        );
+
+        doc.text(
+          `Salida: ${
+            p.exit_time ||
+            ''
+          }`
+        );
+
+        doc.text(
+          `Retorno: ${
+            p.return_time ||
+            ''
+          }`
+        );
+
+        doc.text(
+          `Motivo: ${
+            p.reason || ''
+          }`
+        );
+
+        doc.text(
+          `Estado: ${
+            p.status || ''
+          }`
+        );
+
+        doc.moveDown();
+
+        doc
+          .moveTo(
+            40,
+            doc.y
+          )
+          .lineTo(
+            555,
+            doc.y
+          )
+          .stroke();
+
+        doc.moveDown();
+      }
+
+      doc.end();
     }
-
-    doc.end();
-  });
+  );
 }
 
 /*
@@ -700,37 +911,52 @@ async function handler(event) {
       '/';
 
     /*
-     * Normalizar rutas Netlify /api
-     */
+    |--------------------------------------------------------------------------
+    | NORMALIZAR RUTAS
+    |--------------------------------------------------------------------------
+    */
 
-    requestPath = requestPath
-      .replace(
-        '/.netlify/functions/api',
-        ''
-      )
-      .replace(/^\/api/, '');
+    requestPath =
+      requestPath
+        .replace(
+          '/.netlify/functions/api',
+          ''
+        )
+        .replace(
+          /^\/api/,
+          ''
+        );
 
     if (!requestPath) {
       requestPath = '/';
     }
 
-    if (!requestPath.startsWith('/')) {
+    if (
+      !requestPath.startsWith(
+        '/'
+      )
+    ) {
       requestPath =
-        '/' + requestPath;
+        '/' +
+        requestPath;
     }
 
     const method =
       event.httpMethod ||
-      event.requestContext?.http?.method ||
+      event.requestContext
+        ?.http?.method ||
       'GET';
 
     /*
     |--------------------------------------------------------------------------
-    | CORS OPTIONS
+    | OPTIONS
     |--------------------------------------------------------------------------
     */
 
-    if (method === 'OPTIONS') {
+    if (
+      method ===
+      'OPTIONS'
+    ) {
       return json(200, {
         ok: true,
       });
@@ -738,11 +964,12 @@ async function handler(event) {
 
     /*
     |--------------------------------------------------------------------------
-    | CARGAR POSTGRESQL
+    | CARGAR BASE DE DATOS
     |--------------------------------------------------------------------------
     */
 
-    const db = await loadDB();
+    const db =
+      await loadDB();
 
     /*
     |--------------------------------------------------------------------------
@@ -752,18 +979,22 @@ async function handler(event) {
 
     if (
       method === 'POST' &&
-      requestPath === '/login'
+      requestPath ===
+        '/login'
     ) {
-      const body = parseBody(event);
+      const body =
+        parseBody(event);
 
       const username =
         String(
-          body.username || ''
+          body.username ||
+            ''
         ).trim();
 
       const password =
         String(
-          body.password || ''
+          body.password ||
+            ''
         );
 
       const admin =
@@ -798,29 +1029,44 @@ async function handler(event) {
       const token =
         jwt.sign(
           {
-            id: admin.id,
+            id:
+              admin.id,
+
             username:
               admin.username,
+
             name:
               admin.name,
-            role: 'admin',
+
+            role:
+              'admin',
           },
+
           SECRET,
+
           {
-            expiresIn: '8h',
+            expiresIn:
+              '8h',
           }
         );
 
       return json(200, {
         ok: true,
+
         token,
+
         user: {
-          id: admin.id,
+          id:
+            admin.id,
+
           username:
             admin.username,
+
           name:
             admin.name,
-          role: 'admin',
+
+          role:
+            'admin',
         },
       });
     }
@@ -838,7 +1084,8 @@ async function handler(event) {
     ) {
       const dni =
         String(
-          event.queryStringParameters
+          event
+            .queryStringParameters
             ?.dni || ''
         ).trim();
 
@@ -854,8 +1101,10 @@ async function handler(event) {
           w =>
             String(
               w.dni || ''
-            ).trim() === dni &&
-            w.active !== false
+            ).trim() ===
+              dni &&
+            w.active !==
+              false
         );
 
       if (!worker) {
@@ -869,24 +1118,37 @@ async function handler(event) {
 
       return json(200, {
         ok: true,
+
         found: true,
+
         worker: {
-          id: worker.id,
-          dni: worker.dni,
+          id:
+            worker.id,
+
+          dni:
+            worker.dni,
+
           names:
             worker.names ||
             worker.name ||
             '',
+
           position:
             worker.position ||
             worker.cargo ||
             '',
+
           area:
-            worker.area || '',
+            worker.area ||
+            '',
+
           phone:
-            worker.phone || '',
+            worker.phone ||
+            '',
+
           email:
-            worker.email || '',
+            worker.email ||
+            '',
         },
       });
     }
@@ -902,7 +1164,8 @@ async function handler(event) {
       requestPath ===
         '/public/permissions'
     ) {
-      const body = parseBody(event);
+      const body =
+        parseBody(event);
 
       const dni =
         String(
@@ -915,7 +1178,9 @@ async function handler(event) {
         ).trim();
 
       const date =
-        qDate(body.date);
+        qDate(
+          body.date
+        );
 
       if (!dni) {
         return json(400, {
@@ -943,8 +1208,10 @@ async function handler(event) {
           w =>
             String(
               w.dni || ''
-            ).trim() === dni &&
-            w.active !== false
+            ).trim() ===
+              dni &&
+            w.active !==
+              false
         );
 
       if (!worker) {
@@ -953,12 +1220,6 @@ async function handler(event) {
             'No se encontró un trabajador activo con ese DNI.',
         });
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | DOCUMENTO
-      |--------------------------------------------------------------------------
-      */
 
       let documentData;
 
@@ -973,12 +1234,6 @@ async function handler(event) {
             error.message,
         });
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | ID
-      |--------------------------------------------------------------------------
-      */
 
       const id =
         nextId(
@@ -1046,13 +1301,16 @@ async function handler(event) {
 
       return json(201, {
         ok: true,
+
         message:
           'Solicitud registrada correctamente.',
+
         permission:
           enrichPermission(
             permission,
             db
           ),
+
         numeroSolicitud:
           id,
       });
@@ -1060,14 +1318,16 @@ async function handler(event) {
 
     /*
     |--------------------------------------------------------------------------
-    | DESDE AQUÍ TODAS LAS RUTAS REQUIEREN LOGIN
+    | TODAS LAS RUTAS SIGUIENTES REQUIEREN LOGIN
     |--------------------------------------------------------------------------
     */
 
     const authentication =
       auth(event);
 
-    if (authentication.error) {
+    if (
+      authentication.error
+    ) {
       return authentication.error;
     }
 
@@ -1082,11 +1342,261 @@ async function handler(event) {
 
     if (
       method === 'GET' &&
-      requestPath === '/me'
+      requestPath ===
+        '/me'
     ) {
       return json(200, {
         ok: true,
         user,
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CAMBIAR USUARIO / CONTRASEÑA
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      method === 'PUT' &&
+      requestPath ===
+        '/account'
+    ) {
+      const body =
+        parseBody(event);
+
+      const currentPassword =
+        String(
+          body.currentPassword ||
+            ''
+        );
+
+      const newUsername =
+        String(
+          body.newUsername ||
+            ''
+        ).trim();
+
+      const newPassword =
+        String(
+          body.newPassword ||
+            ''
+        );
+
+      const confirmPassword =
+        String(
+          body.confirmPassword ||
+            ''
+        );
+
+      const admin =
+        db.admins.find(
+          a =>
+            Number(a.id) ===
+            Number(user.id)
+        );
+
+      if (!admin) {
+        return json(404, {
+          error:
+            'Administrador no encontrado.',
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | CONTRASEÑA ACTUAL
+      |--------------------------------------------------------------------------
+      */
+
+      if (
+        !currentPassword
+      ) {
+        return json(400, {
+          error:
+            'Debes ingresar tu contraseña actual.',
+        });
+      }
+
+      const validPassword =
+        await bcrypt.compare(
+          currentPassword,
+          admin.password
+        );
+
+      if (!validPassword) {
+        return json(401, {
+          error:
+            'La contraseña actual es incorrecta.',
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | VERIFICAR QUE HAYA UN CAMBIO
+      |--------------------------------------------------------------------------
+      */
+
+      if (
+        !newUsername &&
+        !newPassword
+      ) {
+        return json(400, {
+          error:
+            'Debes indicar un nuevo usuario o una nueva contraseña.',
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | CAMBIAR USUARIO
+      |--------------------------------------------------------------------------
+      */
+
+      if (newUsername) {
+        if (
+          newUsername.length <
+          4
+        ) {
+          return json(400, {
+            error:
+              'El nuevo usuario debe tener al menos 4 caracteres.',
+          });
+        }
+
+        const usernameExists =
+          db.admins.some(
+            a =>
+              Number(
+                a.id
+              ) !==
+                Number(
+                  admin.id
+                ) &&
+              String(
+                a.username ||
+                  ''
+              ).toLowerCase() ===
+                newUsername.toLowerCase()
+          );
+
+        if (
+          usernameExists
+        ) {
+          return json(409, {
+            error:
+              'Ese nombre de usuario ya está en uso.',
+          });
+        }
+
+        admin.username =
+          newUsername;
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | CAMBIAR CONTRASEÑA
+      |--------------------------------------------------------------------------
+      */
+
+      if (
+        newPassword ||
+        confirmPassword
+      ) {
+        if (!newPassword) {
+          return json(400, {
+            error:
+              'Debes ingresar la nueva contraseña.',
+          });
+        }
+
+        if (
+          newPassword.length <
+          8
+        ) {
+          return json(400, {
+            error:
+              'La nueva contraseña debe tener al menos 8 caracteres.',
+          });
+        }
+
+        if (
+          newPassword !==
+          confirmPassword
+        ) {
+          return json(400, {
+            error:
+              'Las nuevas contraseñas no coinciden.',
+          });
+        }
+
+        admin.password =
+          await bcrypt.hash(
+            newPassword,
+            12
+          );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | GUARDAR CAMBIOS
+      |--------------------------------------------------------------------------
+      */
+
+      await saveDB(db);
+
+      /*
+      |--------------------------------------------------------------------------
+      | GENERAR NUEVO TOKEN
+      |--------------------------------------------------------------------------
+      */
+
+      const newToken =
+        jwt.sign(
+          {
+            id:
+              admin.id,
+
+            username:
+              admin.username,
+
+            name:
+              admin.name,
+
+            role:
+              'admin',
+          },
+
+          SECRET,
+
+          {
+            expiresIn:
+              '8h',
+          }
+        );
+
+      return json(200, {
+        ok: true,
+
+        message:
+          'Datos de acceso actualizados correctamente.',
+
+        token:
+          newToken,
+
+        user: {
+          id:
+            admin.id,
+
+          username:
+            admin.username,
+
+          name:
+            admin.name,
+
+          role:
+            'admin',
+        },
       });
     }
 
@@ -1098,15 +1608,18 @@ async function handler(event) {
 
     if (
       method === 'GET' &&
-      requestPath === '/workers'
+      requestPath ===
+        '/workers'
     ) {
       const params =
-        event.queryStringParameters ||
+        event
+          .queryStringParameters ||
         {};
 
       const search =
         String(
-          params.search || ''
+          params.search ||
+            ''
         )
           .trim()
           .toLowerCase();
@@ -1116,23 +1629,29 @@ async function handler(event) {
 
       if (search) {
         workers =
-          workers.filter(w =>
-            [
-              w.dni,
-              w.names,
-              w.name,
-              w.area,
-              w.position,
-              w.cargo,
-              w.phone,
-              w.email,
-            ]
-              .filter(Boolean)
-              .some(value =>
-                String(value)
-                  .toLowerCase()
-                  .includes(search)
-              )
+          workers.filter(
+            w =>
+              [
+                w.dni,
+                w.names,
+                w.name,
+                w.area,
+                w.position,
+                w.cargo,
+                w.phone,
+                w.email,
+              ]
+                .filter(Boolean)
+                .some(
+                  value =>
+                    String(
+                      value
+                    )
+                      .toLowerCase()
+                      .includes(
+                        search
+                      )
+                )
           );
       }
 
@@ -1150,7 +1669,8 @@ async function handler(event) {
 
     if (
       method === 'POST' &&
-      requestPath === '/workers'
+      requestPath ===
+        '/workers'
     ) {
       const body =
         parseBody(event);
@@ -1163,11 +1683,14 @@ async function handler(event) {
       const names =
         String(
           body.names ||
-          body.name ||
-          ''
+            body.name ||
+            ''
         ).trim();
 
-      if (!dni || !names) {
+      if (
+        !dni ||
+        !names
+      ) {
         return json(400, {
           error:
             'DNI y nombres son obligatorios.',
@@ -1179,7 +1702,8 @@ async function handler(event) {
           w =>
             String(
               w.dni || ''
-            ).trim() === dni
+            ).trim() ===
+            dni
         );
 
       if (duplicate) {
@@ -1199,10 +1723,12 @@ async function handler(event) {
 
         names,
 
-        name: names,
+        name:
+          names,
 
         area:
-          body.area || '',
+          body.area ||
+          '',
 
         position:
           body.position ||
@@ -1215,13 +1741,16 @@ async function handler(event) {
           '',
 
         phone:
-          body.phone || '',
+          body.phone ||
+          '',
 
         email:
-          body.email || '',
+          body.email ||
+          '',
 
         active:
-          body.active !== false,
+          body.active !==
+          false,
 
         created_at:
           nowISO(),
@@ -1253,13 +1782,17 @@ async function handler(event) {
     ) {
       const id =
         Number(
-          requestPath.split('/')[2]
+          requestPath.split(
+            '/'
+          )[2]
         );
 
       const worker =
         db.workers.find(
           w =>
-            Number(w.id) === id
+            Number(
+              w.id
+            ) === id
         );
 
       if (!worker) {
@@ -1272,7 +1805,10 @@ async function handler(event) {
       const body =
         parseBody(event);
 
-      if (body.dni !== undefined) {
+      if (
+        body.dni !==
+        undefined
+      ) {
         worker.dni =
           String(
             body.dni
@@ -1280,8 +1816,10 @@ async function handler(event) {
       }
 
       if (
-        body.names !== undefined ||
-        body.name !== undefined
+        body.names !==
+          undefined ||
+        body.name !==
+          undefined
       ) {
         worker.names =
           String(
@@ -1295,7 +1833,8 @@ async function handler(event) {
       }
 
       if (
-        body.area !== undefined
+        body.area !==
+        undefined
       ) {
         worker.area =
           body.area;
@@ -1304,7 +1843,8 @@ async function handler(event) {
       if (
         body.position !==
           undefined ||
-        body.cargo !== undefined
+        body.cargo !==
+          undefined
       ) {
         worker.position =
           body.position ??
@@ -1365,16 +1905,22 @@ async function handler(event) {
     ) {
       const id =
         Number(
-          requestPath.split('/')[2]
+          requestPath.split(
+            '/'
+          )[2]
         );
 
       const index =
         db.workers.findIndex(
           w =>
-            Number(w.id) === id
+            Number(
+              w.id
+            ) === id
         );
 
-      if (index === -1) {
+      if (
+        index === -1
+      ) {
         return json(404, {
           error:
             'Trabajador no encontrado.',
@@ -1414,6 +1960,7 @@ async function handler(event) {
 
       return json(200, {
         ok: true,
+
         message:
           'Trabajador eliminado correctamente.',
       });
@@ -1433,13 +1980,17 @@ async function handler(event) {
     ) {
       const id =
         Number(
-          requestPath.split('/')[2]
+          requestPath.split(
+            '/'
+          )[2]
         );
 
       const worker =
         db.workers.find(
           w =>
-            Number(w.id) === id
+            Number(
+              w.id
+            ) === id
         );
 
       if (!worker) {
@@ -1457,11 +2008,12 @@ async function handler(event) {
                 p.worker_id
               ) === id
           )
-          .map(p =>
-            enrichPermission(
-              p,
-              db
-            )
+          .map(
+            p =>
+              enrichPermission(
+                p,
+                db
+              )
           );
 
       const attendance =
@@ -1492,31 +2044,39 @@ async function handler(event) {
         '/permissions'
     ) {
       const params =
-        event.queryStringParameters ||
+        event
+          .queryStringParameters ||
         {};
 
       const search =
         String(
-          params.search || ''
+          params.search ||
+            ''
         )
           .trim()
           .toLowerCase();
 
       const status =
         String(
-          params.status || ''
+          params.status ||
+            ''
         ).trim();
 
       const type =
         String(
-          params.type || ''
+          params.type ||
+            ''
         ).trim();
 
       const from =
-        qDate(params.from);
+        qDate(
+          params.from
+        );
 
       const to =
-        qDate(params.to);
+        qDate(
+          params.to
+        );
 
       let permissions =
         db.permissions.map(
@@ -1541,10 +2101,15 @@ async function handler(event) {
                 p.observation,
               ]
                 .filter(Boolean)
-                .some(value =>
-                  String(value)
-                    .toLowerCase()
-                    .includes(search)
+                .some(
+                  value =>
+                    String(
+                      value
+                    )
+                      .toLowerCase()
+                      .includes(
+                        search
+                      )
                 )
           );
       }
@@ -1573,8 +2138,9 @@ async function handler(event) {
         permissions =
           permissions.filter(
             p =>
-              qDate(p.date) >=
-              from
+              qDate(
+                p.date
+              ) >= from
           );
       }
 
@@ -1582,18 +2148,21 @@ async function handler(event) {
         permissions =
           permissions.filter(
             p =>
-              qDate(p.date) <=
-              to
+              qDate(
+                p.date
+              ) <= to
           );
       }
 
       permissions.sort(
         (a, b) =>
           new Date(
-            b.created_at || 0
+            b.created_at ||
+              0
           ) -
           new Date(
-            a.created_at || 0
+            a.created_at ||
+              0
           )
       );
 
@@ -1625,8 +2194,9 @@ async function handler(event) {
       const worker =
         db.workers.find(
           w =>
-            Number(w.id) ===
-            workerId
+            Number(
+              w.id
+            ) === workerId
         );
 
       if (!worker) {
@@ -1663,7 +2233,9 @@ async function handler(event) {
           body.type || '',
 
         date:
-          qDate(body.date),
+          qDate(
+            body.date
+          ),
 
         exit_time:
           body.exit_time ||
@@ -1716,6 +2288,7 @@ async function handler(event) {
 
       return json(201, {
         ok: true,
+
         permission:
           enrichPermission(
             permission,
@@ -1738,16 +2311,22 @@ async function handler(event) {
     ) {
       const id =
         Number(
-          requestPath.split('/')[2]
+          requestPath.split(
+            '/'
+          )[2]
         );
 
       const index =
         db.permissions.findIndex(
           p =>
-            Number(p.id) === id
+            Number(
+              p.id
+            ) === id
         );
 
-      if (index === -1) {
+      if (
+        index === -1
+      ) {
         return json(404, {
           error:
             'Solicitud no encontrada.',
@@ -1771,6 +2350,7 @@ async function handler(event) {
 
       return json(200, {
         ok: true,
+
         message:
           'Solicitud eliminada correctamente.',
       });
@@ -1790,13 +2370,17 @@ async function handler(event) {
     ) {
       const id =
         Number(
-          requestPath.split('/')[2]
+          requestPath.split(
+            '/'
+          )[2]
         );
 
       const permission =
         db.permissions.find(
           p =>
-            Number(p.id) === id
+            Number(
+              p.id
+            ) === id
         );
 
       if (!permission) {
@@ -1811,7 +2395,8 @@ async function handler(event) {
 
       const newStatus =
         String(
-          body.status || ''
+          body.status ||
+            ''
         ).trim();
 
       if (
@@ -1856,7 +2441,7 @@ async function handler(event) {
 
       if (
         newStatus ===
-          'Pendiente'
+        'Pendiente'
       ) {
         permission.approved_by =
           '';
@@ -1922,6 +2507,7 @@ async function handler(event) {
 
       return json(200, {
         ok: true,
+
         permission:
           enrichPermission(
             permission,
@@ -1942,11 +2528,14 @@ async function handler(event) {
         '/attendance'
     ) {
       const params =
-        event.queryStringParameters ||
+        event
+          .queryStringParameters ||
         {};
 
       const date =
-        qDate(params.date);
+        qDate(
+          params.date
+        );
 
       let attendance =
         [...db.attendance];
@@ -1955,28 +2544,35 @@ async function handler(event) {
         attendance =
           attendance.filter(
             a =>
-              qDate(a.date) ===
-              date
+              qDate(
+                a.date
+              ) === date
           );
       }
 
       attendance =
-        attendance.map(a => {
-          const worker =
-            db.workers.find(
-              w =>
-                Number(w.id) ===
-                Number(
-                  a.worker_id
-                )
-            );
+        attendance.map(
+          a => {
+            const worker =
+              db.workers.find(
+                w =>
+                  Number(
+                    w.id
+                  ) ===
+                  Number(
+                    a.worker_id
+                  )
+              );
 
-          return {
-            ...a,
-            worker:
-              worker || null,
-          };
-        });
+            return {
+              ...a,
+
+              worker:
+                worker ||
+                null,
+            };
+          }
+        );
 
       return json(200, {
         ok: true,
@@ -2006,8 +2602,9 @@ async function handler(event) {
       const worker =
         db.workers.find(
           w =>
-            Number(w.id) ===
-            workerId
+            Number(
+              w.id
+            ) === workerId
         );
 
       if (!worker) {
@@ -2086,40 +2683,49 @@ async function handler(event) {
 
       return json(200, {
         ok: true,
-        notifications:
-          pending.map(p => {
-            const worker =
-              db.workers.find(
-                w =>
-                  Number(
-                    w.id
-                  ) ===
-                  Number(
-                    p.worker_id
-                  )
-              );
 
-            return {
-              id: p.id,
-              type:
-                'permission',
-              title:
-                'Nueva solicitud de permiso',
-              message:
-                `${
-                  worker?.names ||
-                  worker?.name ||
-                  'Trabajador'
-                } tiene una solicitud pendiente.`,
-              permission:
-                enrichPermission(
-                  p,
-                  db
-                ),
-              created_at:
-                p.created_at,
-            };
-          }),
+        notifications:
+          pending.map(
+            p => {
+              const worker =
+                db.workers.find(
+                  w =>
+                    Number(
+                      w.id
+                    ) ===
+                    Number(
+                      p.worker_id
+                    )
+                );
+
+              return {
+                id:
+                  p.id,
+
+                type:
+                  'permission',
+
+                title:
+                  'Nueva solicitud de permiso',
+
+                message:
+                  `${
+                    worker?.names ||
+                    worker?.name ||
+                    'Trabajador'
+                  } tiene una solicitud pendiente.`,
+
+                permission:
+                  enrichPermission(
+                    p,
+                    db
+                  ),
+
+                created_at:
+                  p.created_at,
+              };
+            }
+          ),
       });
     }
 
@@ -2309,7 +2915,7 @@ async function handler(event) {
 
       /*
       |--------------------------------------------------------------------------
-      | RANKING DE TRABAJADORES
+      | RANKING
       |--------------------------------------------------------------------------
       */
 
@@ -2360,11 +2966,14 @@ async function handler(event) {
                 worker.cargo ||
                 '',
 
-              total: 0,
+              total:
+                0,
             };
           }
 
-          rankingMap[id].total++;
+          rankingMap[
+            id
+          ].total++;
         }
       );
 
@@ -2379,7 +2988,7 @@ async function handler(event) {
 
       /*
       |--------------------------------------------------------------------------
-      | RESPUESTA
+      | RESPUESTA DASHBOARD
       |--------------------------------------------------------------------------
       */
 
@@ -2429,12 +3038,16 @@ async function handler(event) {
                     0
                 )
             )
-            .slice(0, 10)
-            .map(p =>
-              enrichPermission(
-                p,
-                db
-              )
+            .slice(
+              0,
+              10
+            )
+            .map(
+              p =>
+                enrichPermission(
+                  p,
+                  db
+                )
             ),
       });
     }
@@ -2540,8 +3153,10 @@ async function handler(event) {
     return json(404, {
       error:
         'Ruta no encontrada.',
+
       path:
         requestPath,
+
       method,
     });
   } catch (error) {
