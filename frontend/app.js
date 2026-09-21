@@ -28,10 +28,7 @@ function showLogin() {
   $("#login").classList.remove("hidden");
   $("#app").classList.add("hidden");
 
-  setTimeout(
-    () => $("#user").focus(),
-    50
-  );
+  setTimeout(() => $("#user").focus(), 50);
 }
 
 function showLanding() {
@@ -52,7 +49,6 @@ function showApp() {
 ========================================================= */
 
 function headers(json = true) {
-
   const h = {
     Authorization: "Bearer " + token
   };
@@ -80,18 +76,13 @@ async function api(url, opt = {}) {
   );
 
   if (r.status === 401) {
-
     logout();
 
-    throw Error(
-      "Sesión expirada"
-    );
+    throw Error("Sesión expirada");
   }
 
   const t =
-    r.headers.get(
-      "content-type"
-    ) || "";
+    r.headers.get("content-type") || "";
 
   const d =
     t.includes("json")
@@ -99,7 +90,6 @@ async function api(url, opt = {}) {
       : await r.blob();
 
   if (!r.ok) {
-
     throw Error(
       d.error ||
       "Error"
@@ -207,6 +197,7 @@ function badge(s) {
 function documentInfo(p) {
 
   const data = p.document || "";
+
   const name =
     p.document_name ||
     "Documento sustentatorio";
@@ -222,12 +213,6 @@ function documentInfo(p) {
       </div>
     `;
   }
-
-  /*
-     El backend guarda el archivo como Data URL:
-     data:image/png;base64,...
-     data:application/pdf;base64,...
-  */
 
   let html = `
     <div
@@ -314,10 +299,6 @@ function documentInfo(p) {
 
     </div>
   `;
-
-  /*
-     Si es una imagen, mostramos una vista previa.
-  */
 
   if (
     type.startsWith("image/")
@@ -598,6 +579,16 @@ async function loadDashboard() {
         "/dashboard"
       );
 
+    const byType =
+      Array.isArray(d.byType)
+        ? d.byType
+        : [];
+
+    const ranking =
+      Array.isArray(d.ranking)
+        ? d.ranking
+        : [];
+
     $("#content").innerHTML =
       layout(
         "Resumen general",
@@ -616,7 +607,7 @@ Trabajadores activos
 </span>
 
 <strong>
-${d.totalWorkers}
+${d.activeWorkers ?? 0}
 </strong>
 
 <div class="mini">
@@ -637,11 +628,11 @@ Permisos registrados
 </span>
 
 <strong>
-${d.permissions}
+${d.totalPermissions ?? 0}
 </strong>
 
 <div class="mini">
-${d.weekly} esta semana
+${d.weekly ?? 0} esta semana
 </div>
 
 <span class="circle">
@@ -658,7 +649,7 @@ Pendientes
 </span>
 
 <strong>
-${d.pending}
+${d.pending ?? 0}
 </strong>
 
 <div class="mini">
@@ -679,7 +670,7 @@ Tardanzas semana
 </span>
 
 <strong>
-${d.late}
+${d.late ?? 0}
 </strong>
 
 <div class="mini">
@@ -706,10 +697,10 @@ Permisos por tipo
 <div class="bars">
 
 ${
-d.byType.length
+  byType.length
 
-? d.byType.map(
-x => `
+  ? byType.map(
+      x => `
 
 <div class="bar-row">
 
@@ -721,16 +712,15 @@ ${esc(x.type)}
 
 <i style="
 width:${
-Math.min(
-100,
-x.total /
-Math.max(
-...d.byType.map(
-a => a.total
-)
-) *
-100
-)
+  Math.min(
+    100,
+    x.total /
+    Math.max(
+      ...byType.map(
+        a => a.total
+      )
+    )
+  ) * 100
 }%">
 </i>
 
@@ -742,9 +732,9 @@ ${x.total}
 
 </div>
 `
-).join("")
+    ).join("")
 
-:`
+  : `
 <div class="empty">
 Aún no hay permisos registrados.
 </div>
@@ -769,7 +759,7 @@ Salidas de hoy
 </span>
 
 <b>
-${d.today}
+${d.today ?? 0}
 </b>
 
 </div>
@@ -781,7 +771,7 @@ Esta semana
 </span>
 
 <b>
-${d.weekly}
+${d.weekly ?? 0}
 </b>
 
 </div>
@@ -793,7 +783,7 @@ Este mes
 </span>
 
 <b>
-${d.monthly}
+${d.monthly ?? 0}
 </b>
 
 </div>
@@ -805,7 +795,7 @@ Aprobados
 </span>
 
 <b>
-${d.approved}
+${d.approved ?? 0}
 </b>
 
 </div>
@@ -825,9 +815,9 @@ Trabajadores con más registros de permisos
 </h4>
 
 ${
-d.ranking.length
+  ranking.length
 
-?`
+  ? `
 
 <div
 class="table-wrap"
@@ -852,8 +842,8 @@ style="border:0"
 
 <tbody>
 
-${d.ranking.map(
-x => `
+${ranking.map(
+  x => `
 
 <tr>
 
@@ -894,7 +884,9 @@ ${x.total}
 
 `
 
-:`
+  :
+
+`
 
 <div class="empty">
 Agrega trabajadores y permisos
@@ -923,26 +915,33 @@ para ver estadísticas.
 
 async function loadWorkers() {
 
-  const rows =
-    await api(
-      "/workers"
-    );
+  try {
 
-  $("#content").innerHTML =
-    layout(
-      "Trabajadores",
-      "Registro y administración del personal",
-      `
-      <button
-        class="primary"
-        onclick="workerForm()"
-      >
-        + Nuevo trabajador
-      </button>
-      `
-    )
+    const data =
+      await api(
+        "/workers"
+      );
 
-    +
+    const rows =
+      Array.isArray(data.workers)
+        ? data.workers
+        : [];
+
+    $("#content").innerHTML =
+      layout(
+        "Trabajadores",
+        "Registro y administración del personal",
+        `
+        <button
+          class="primary"
+          onclick="workerForm()"
+        >
+          + Nuevo trabajador
+        </button>
+        `
+      )
+
+      +
 
 `
 <div class="toolbar">
@@ -1011,6 +1010,14 @@ ${workerRows(rows)}
 
 </div>
 `;
+
+  } catch (e) {
+
+    toast(
+      e.message ||
+      "No se pudieron cargar los trabajadores"
+    );
+  }
 }
 
 
@@ -1086,37 +1093,36 @@ Ver
 
 <button
 class="secondary"
-onclick='workerForm(${JSON.stringify(w)})'
+onclick='workerForm(${JSON.stringify(w).replace(/'/g, "&#039;")})'
 >
 Editar
 </button>
 
 
 ${
-w.status === "Activo"
+  w.status === "Activo"
 
-?
+  ?
 
-`
-<button
-class="danger"
-onclick="deleteWorker(${w.id})"
->
-Eliminar
-</button>
-`
+  `
+  <button
+  class="danger"
+  onclick="deleteWorker(${w.id})"
+  >
+  Eliminar
+  </button>
+  `
 
-:
+  :
 
-`
-<button
-class="secondary"
-onclick="activateWorker(${w.id})"
->
-Activar
-</button>
-`
-
+  `
+  <button
+  class="secondary"
+  onclick="activateWorker(${w.id})"
+  >
+  Activar
+  </button>
+  `
 }
 
 </td>
@@ -1152,17 +1158,32 @@ No hay trabajadores registrados.
 
 async function filterWorkers() {
 
-  const rows =
-    await api(
-      "/workers?search=" +
-      encodeURIComponent(
-        $("#workerSearch").value
-      )
-    );
+  try {
 
-  $("#workerRows")
-    .innerHTML =
+    const data =
+      await api(
+        "/workers?search=" +
+        encodeURIComponent(
+          $("#workerSearch").value
+        )
+      );
+
+    const rows =
+      Array.isArray(data.workers)
+        ? data.workers
+        : [];
+
+    $("#workerRows")
+      .innerHTML =
       workerRows(rows);
+
+  } catch (e) {
+
+    toast(
+      e.message ||
+      "No se pudo realizar la búsqueda"
+    );
+  }
 }
 
 
@@ -1195,9 +1216,8 @@ async function deleteWorker(id) {
       "Trabajador eliminado definitivamente"
     );
 
-    loadWorkers();
-
-    loadDashboard();
+    await loadWorkers();
+    await loadDashboard();
 
   } catch (e) {
 
@@ -1240,9 +1260,8 @@ async function activateWorker(id) {
       "Trabajador activado correctamente"
     );
 
-    loadWorkers();
-
-    loadDashboard();
+    await loadWorkers();
+    await loadDashboard();
 
   } catch (e) {
 
@@ -1470,9 +1489,8 @@ Guardar trabajador
           "Trabajador guardado correctamente"
         );
 
-        loadWorkers();
-
-        loadDashboard();
+        await loadWorkers();
+        await loadDashboard();
 
       } catch (x) {
 
@@ -1615,12 +1633,12 @@ style="margin-top:12px"
 </h4>
 
 ${
-d.permissions.length
+  d.permissions.length
 
-? d.permissions
-  .slice(0, 8)
-  .map(
-    p => `
+  ? d.permissions
+    .slice(0, 8)
+    .map(
+      p => `
 
 <div class="kpi-line">
 
@@ -1635,10 +1653,10 @@ ${badge(p.status)}
 </div>
 
 `
-  )
-  .join("")
+    )
+    .join("")
 
-:`<div class="empty">
+  : `<div class="empty">
 Sin registros.
 </div>`
 }
@@ -1659,27 +1677,34 @@ Sin registros.
 
 async function loadPermissions() {
 
-  const rows =
-    await api(
-      "/permissions"
-    );
+  try {
 
-  $("#content").innerHTML =
-    layout(
-      "Permisos y salidas",
-      "Solicitudes, autorizaciones y control de salidas",
+    const data =
+      await api(
+        "/permissions"
+      );
 
-      `
-      <button
-      class="primary"
-      onclick="permissionForm()"
-      >
-      + Registrar permiso
-      </button>
-      `
-    )
+    const rows =
+      Array.isArray(data.permissions)
+        ? data.permissions
+        : [];
 
-+
+    $("#content").innerHTML =
+      layout(
+        "Permisos y salidas",
+        "Solicitudes, autorizaciones y control de salidas",
+
+        `
+        <button
+        class="primary"
+        onclick="permissionForm()"
+        >
+        + Registrar permiso
+        </button>
+        `
+      )
+
+      +
 
 `
 <div class="toolbar">
@@ -1822,6 +1847,14 @@ ${permissionRows(rows)}
 
 </div>
 `;
+
+  } catch (e) {
+
+    toast(
+      e.message ||
+      "No se pudieron cargar los permisos"
+    );
+  }
 }
 
 
@@ -1889,9 +1922,9 @@ ${badge(p.status)}
 <td>
 
 ${
-p.status === "Pendiente"
+  p.status === "Pendiente"
 
-?`
+  ?`
 
 <button
 class="primary"
@@ -1902,11 +1935,11 @@ Revisar
 
 `
 
-:`
+  :`
 
 <button
 class="secondary"
-onclick="permissionDetail(${JSON.stringify(p).replace(/"/g, "&quot;")})"
+onclick='permissionDetail(${JSON.stringify(p).replace(/'/g, "&#039;")})'
 >
 Ver
 </button>
@@ -1978,8 +2011,8 @@ async function deletePermission(id) {
     );
 
     await loadPermissions();
-
     await loadNotifications();
+    await loadDashboard();
 
   } catch (e) {
 
@@ -1997,25 +2030,41 @@ async function deletePermission(id) {
 
 async function filterPermissions() {
 
-  let u =
-    "/permissions?search=" +
-    encodeURIComponent(
-      $("#psearch").value
-    ) +
-    "&status=" +
-    encodeURIComponent(
-      $("#pstatus").value
-    ) +
-    "&type=" +
-    encodeURIComponent(
-      $("#ptype").value
-    );
+  try {
 
-  $("#permissionRows")
-    .innerHTML =
-      permissionRows(
-        await api(u)
+    let u =
+      "/permissions?search=" +
+      encodeURIComponent(
+        $("#psearch").value
+      ) +
+      "&status=" +
+      encodeURIComponent(
+        $("#pstatus").value
+      ) +
+      "&type=" +
+      encodeURIComponent(
+        $("#ptype").value
       );
+
+    const data =
+      await api(u);
+
+    const rows =
+      Array.isArray(data.permissions)
+        ? data.permissions
+        : [];
+
+    $("#permissionRows")
+      .innerHTML =
+      permissionRows(rows);
+
+  } catch (e) {
+
+    toast(
+      e.message ||
+      "No se pudieron filtrar los permisos"
+    );
+  }
 }
 
 
@@ -2025,10 +2074,15 @@ async function filterPermissions() {
 
 async function permissionForm() {
 
-  const ws =
+  const data =
     await api(
       "/workers"
     );
+
+  const ws =
+    Array.isArray(data.workers)
+      ? data.workers
+      : [];
 
   const active =
     ws.filter(
@@ -2064,7 +2118,7 @@ Seleccionar trabajador
 </option>
 
 ${active.map(
-w => `
+  w => `
 
 <option value="${w.id}">
 
@@ -2259,7 +2313,9 @@ Registrar
           "Permiso registrado"
         );
 
-        loadPermissions();
+        await loadPermissions();
+        await loadNotifications();
+        await loadDashboard();
 
       } catch (x) {
 
@@ -2288,11 +2344,11 @@ async function loadNotifications() {
       $("#pendingCount");
 
     b.textContent =
-      d.pending;
+      d.pending ?? 0;
 
     b.classList.toggle(
       "zero",
-      d.pending === 0
+      (d.pending ?? 0) === 0
     );
 
   } catch (e) {}
@@ -2306,6 +2362,11 @@ async function showNotifications() {
       "/notifications"
     );
 
+  const latest =
+    Array.isArray(d.latest)
+      ? d.latest
+      : [];
+
   openModal(`
 
 <h3 class="modal-title">
@@ -2314,10 +2375,10 @@ async function showNotifications() {
 
 
 ${
-d.latest.length
+  latest.length
 
-? d.latest.map(
-x => `
+  ? latest.map(
+      x => `
 
 <div
 class="notification-row"
@@ -2355,9 +2416,11 @@ Pendiente
 </div>
 
 `
-).join("")
+    ).join("")
 
-:`
+  :
+
+`
 
 <div class="empty">
 No tienes solicitudes pendientes.
@@ -2388,10 +2451,15 @@ Ver todos los permisos
 
 async function reviewPermission(id) {
 
-  const rows =
+  const data =
     await api(
       "/permissions"
     );
+
+  const rows =
+    Array.isArray(data.permissions)
+      ? data.permissions
+      : [];
 
   const p =
     rows.find(
@@ -2537,9 +2605,9 @@ ${documentInfo(p)}
 
 
 ${
-p.status === "Pendiente"
+  p.status === "Pendiente"
 
-?`
+  ?`
 
 <div class="decision-box">
 
@@ -2584,7 +2652,7 @@ onclick="decidePermission(${p.id},'Aprobado')"
 
 `
 
-:
+  :
 
 `
 
@@ -2679,9 +2747,9 @@ async function decidePermission(
         : "Permiso rechazado"
     );
 
-    loadNotifications();
-
-    loadPermissions();
+    await loadNotifications();
+    await loadPermissions();
+    await loadDashboard();
 
   } catch (e) {
 
@@ -2722,7 +2790,8 @@ async function setPermission(
       "Estado actualizado"
     );
 
-    loadPermissions();
+    await loadPermissions();
+    await loadDashboard();
 
   } catch (e) {
 
@@ -2910,27 +2979,29 @@ ${documentInfo(p)}
 
 async function loadAttendance() {
 
-  const rows =
-    await api(
-      "/attendance?date=" + today
-    );
+  try {
 
-  $("#content").innerHTML =
-    layout(
-      "Asistencia",
-      "Control diario de entradas, salidas y tardanzas",
+    const rows =
+      await api(
+        "/attendance?date=" + today
+      );
 
-      `
-      <button
-      class="primary"
-      onclick="attendanceForm()"
-      >
-      + Registrar asistencia
-      </button>
-      `
-    )
+    $("#content").innerHTML =
+      layout(
+        "Asistencia",
+        "Control diario de entradas, salidas y tardanzas",
 
-+
+        `
+        <button
+        class="primary"
+        onclick="attendanceForm()"
+        >
+        + Registrar asistencia
+        </button>
+        `
+      )
+
+      +
 
 `
 <div class="toolbar">
@@ -2995,6 +3066,14 @@ ${attendanceRows(rows)}
 
 </div>
 `;
+
+  } catch (e) {
+
+    toast(
+      e.message ||
+      "No se pudo cargar la asistencia"
+    );
+  }
 }
 
 
@@ -3079,15 +3158,25 @@ No hay registros para esta fecha.
 
 async function refreshAttendance() {
 
-  const r =
-    await api(
-      "/attendance?date=" +
-      $("#adate").value
-    );
+  try {
 
-  $("#attendanceRows")
-    .innerHTML =
+    const r =
+      await api(
+        "/attendance?date=" +
+        $("#adate").value
+      );
+
+    $("#attendanceRows")
+      .innerHTML =
       attendanceRows(r);
+
+  } catch (e) {
+
+    toast(
+      e.message ||
+      "No se pudo actualizar la asistencia"
+    );
+  }
 }
 
 
@@ -3097,10 +3186,15 @@ async function refreshAttendance() {
 
 async function attendanceForm() {
 
-  const ws =
+  const data =
     await api(
       "/workers"
     );
+
+  const ws =
+    Array.isArray(data.workers)
+      ? data.workers
+      : [];
 
   openModal(`
 
@@ -3126,13 +3220,13 @@ required
 >
 
 ${
-ws
-.filter(
-  w =>
-    w.status === "Activo"
-)
-.map(
-  w => `
+  ws
+  .filter(
+    w =>
+      w.status === "Activo"
+  )
+  .map(
+    w => `
 
 <option
 value="${w.id}"
@@ -3143,8 +3237,8 @@ ${esc(w.names)}
 </option>
 
 `
-)
-.join("")
+  )
+  .join("")
 }
 
 </select>
@@ -3311,7 +3405,8 @@ Guardar
           "Asistencia guardada"
         );
 
-        loadAttendance();
+        await loadAttendance();
+        await loadDashboard();
 
       } catch (x) {
 
