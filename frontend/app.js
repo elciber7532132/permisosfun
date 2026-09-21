@@ -1260,8 +1260,8 @@ async function deleteWorker(id) {
       "Trabajador eliminado correctamente"
     );
 
+    /* SE QUEDA EN TRABAJADORES */
     await loadWorkers();
-    await loadDashboard();
 
   } catch (e) {
     toast(
@@ -1298,8 +1298,8 @@ async function activateWorker(id) {
       "Trabajador activado correctamente"
     );
 
+    /* SE QUEDA EN TRABAJADORES */
     await loadWorkers();
-    await loadDashboard();
 
   } catch (e) {
     toast(
@@ -1530,8 +1530,8 @@ Guardar trabajador
           "Trabajador guardado correctamente"
         );
 
+        /* SE QUEDA EN TRABAJADORES */
         await loadWorkers();
-        await loadDashboard();
 
       } catch (x) {
         toast(x.message);
@@ -1713,7 +1713,6 @@ Sin registros.
 </div>
 
 `);
-
   } catch (e) {
     toast(
       e.message ||
@@ -2080,7 +2079,7 @@ onclick='permissionDetail(${JSON.stringify({
   ...p,
   names: workerName,
   dni: workerDni
-}).replace(/'/g, "&#039;")})'
+}).replace(/'/g, "&#039;")}'
 >
 Ver
 </button>
@@ -2147,9 +2146,9 @@ async function deletePermission(id) {
       "Permiso eliminado correctamente"
     );
 
+    /* SE QUEDA EN PERMISOS */
     await loadPermissions();
     await loadNotifications();
-    await loadDashboard();
 
   } catch (e) {
     toast(
@@ -2470,9 +2469,9 @@ Registrar
           "Permiso registrado"
         );
 
+        /* SE QUEDA EN PERMISOS */
         await loadPermissions();
         await loadNotifications();
-        await loadDashboard();
 
       } catch (x) {
         toast(x.message);
@@ -3018,9 +3017,9 @@ async function decidePermission(
         : "Permiso rechazado"
     );
 
+    /* SE QUEDA EN PERMISOS */
     await loadNotifications();
     await loadPermissions();
-    await loadDashboard();
 
   } catch (e) {
     toast(e.message);
@@ -3058,8 +3057,9 @@ async function setPermission(
       "Estado actualizado"
     );
 
+    /* SE QUEDA EN PERMISOS */
     await loadPermissions();
-    await loadDashboard();
+    await loadNotifications();
 
   } catch (e) {
     toast(e.message);
@@ -3718,8 +3718,8 @@ Guardar
           "Asistencia guardada"
         );
 
+        /* SE QUEDA EN ASISTENCIA */
         await loadAttendance();
-        await loadDashboard();
 
       } catch (x) {
         toast(x.message);
