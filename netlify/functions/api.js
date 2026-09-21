@@ -23,17 +23,14 @@ async function loadDB() {
   let db = null;
 
   try {
-
     db = JSON.parse(
       fs.readFileSync(DB_FILE, 'utf8')
     );
-
   } catch {}
 
   if (!db) {
 
     db = {
-
       admins: [],
       workers: [],
       permissions: [],
@@ -46,22 +43,16 @@ async function loadDB() {
         attendance: 0,
         signatures: 0
       }
-
     };
 
     db.admins.push({
-
       id: 1,
-
       username: 'admin',
-
       password: bcrypt.hashSync(
         'admin123',
         10
       ),
-
       name: 'Administrador'
-
     });
 
     fs.mkdirSync(
@@ -80,6 +71,55 @@ async function loadDB() {
       )
     );
   }
+
+  /* Compatibilidad con bases antiguas */
+  db.admins ||= [];
+  db.workers ||= [];
+  db.permissions ||= [];
+  db.attendance ||= [];
+  db.signatures ||= [];
+
+  db.counters ||= {};
+
+  db.counters.workers ||=
+    db.workers.reduce(
+      (max, x) =>
+        Math.max(
+          max,
+          Number(x.id) || 0
+        ),
+      0
+    );
+
+  db.counters.permissions ||=
+    db.permissions.reduce(
+      (max, x) =>
+        Math.max(
+          max,
+          Number(x.id) || 0
+        ),
+      0
+    );
+
+  db.counters.attendance ||=
+    db.attendance.reduce(
+      (max, x) =>
+        Math.max(
+          max,
+          Number(x.id) || 0
+        ),
+      0
+    );
+
+  db.counters.signatures ||=
+    db.signatures.reduce(
+      (max, x) =>
+        Math.max(
+          max,
+          Number(x.id) || 0
+        ),
+      0
+    );
 
   return db;
 }
@@ -115,7 +155,7 @@ function nextId(db, type) {
 
 
 /* =========================================================
-   RESPUESTAS
+   RESPUESTA JSON
 ========================================================= */
 
 function json(
@@ -124,11 +164,9 @@ function json(
 ) {
 
   return {
-
     statusCode,
 
     headers: {
-
       'Content-Type':
         'application/json',
 
@@ -143,11 +181,9 @@ function json(
 
       'Access-Control-Allow-Methods':
         'GET, POST, PUT, DELETE, OPTIONS'
-
     },
 
     body: JSON.stringify(body)
-
   };
 }
 
@@ -159,19 +195,20 @@ function json(
 function auth(event) {
 
   const h =
-    event.headers.authorization ||
-    event.headers.Authorization ||
+    event.headers?.authorization ||
+    event.headers?.Authorization ||
     '';
 
   if (!h.startsWith('Bearer ')) {
 
     throw Object.assign(
-      new Error('No autorizado'),
+      new Error(
+        'No autorizado'
+      ),
       {
         statusCode: 401
       }
     );
-
   }
 
   try {
@@ -184,12 +221,13 @@ function auth(event) {
   } catch {
 
     throw Object.assign(
-      new Error('Sesión expirada'),
+      new Error(
+        'Sesión expirada'
+      ),
       {
         statusCode: 401
       }
     );
-
   }
 }
 
@@ -202,6 +240,13 @@ function parseBody(event) {
 
   try {
 
+    if (
+      typeof event.body ===
+      'object'
+    ) {
+      return event.body || {};
+    }
+
     return event.body
       ? JSON.parse(event.body)
       : {};
@@ -209,7 +254,6 @@ function parseBody(event) {
   } catch {
 
     return {};
-
   }
 }
 
@@ -218,7 +262,6 @@ function qDate(v) {
 
   return String(v || '')
     .slice(0, 10);
-
 }
 
 
@@ -261,12 +304,11 @@ function enrichPermission(
       w.area || ''
 
   };
-
 }
 
 
 /* =========================================================
-   REPORTES
+   REPORTE EXCEL
 ========================================================= */
 
 async function reportExcel(db) {
@@ -302,6 +344,12 @@ async function reportExcel(db) {
     {
       header: 'Área',
       key: 'area',
+      width: 20
+    },
+
+    {
+      header: 'Cargo',
+      key: 'position',
       width: 20
     },
 
@@ -346,11 +394,9 @@ async function reportExcel(db) {
       key: 'decision_reason',
       width: 35
     }
-
   ];
 
   db.permissions
-
     .map(
       p =>
         enrichPermission(
@@ -358,7 +404,6 @@ async function reportExcel(db) {
           db
         )
     )
-
     .forEach(
       p =>
         ws.addRow(p)
@@ -369,14 +414,20 @@ async function reportExcel(db) {
   };
 
   ws.autoFilter =
-    'A1:K1';
+    'A1:L1';
+
+  const buffer =
+    await wb.xlsx.writeBuffer();
 
   return Buffer.from(
-    await wb.xlsx.writeBuffer()
+    buffer
   );
-
 }
 
+
+/* =========================================================
+   REPORTE PDF
+========================================================= */
 
 async function reportPDF(db) {
 
@@ -389,8 +440,8 @@ async function reportPDF(db) {
 
   doc.on(
     'data',
-    c =>
-      chunks.push(c)
+    chunk =>
+      chunks.push(chunk)
   );
 
   const done =
@@ -421,7 +472,6 @@ async function reportPDF(db) {
   doc.moveDown();
 
   db.permissions
-
     .map(
       p =>
         enrichPermission(
@@ -429,7 +479,6 @@ async function reportPDF(db) {
           db
         )
     )
-
     .forEach(
       (p, i) => {
 
@@ -442,17 +491,31 @@ async function reportPDF(db) {
         doc
           .fontSize(9)
           .text(
-            `Tipo: ${p.type} | Horario: ${
-              p.exit_time || '-'
-            } - ${
-              p.return_time || '-'
-            } | Estado: ${p.status}`
+            `Área: ${p.area || '-'} | Cargo: ${
+              p.position || '-'
+            }`
           );
+
+        doc.text(
+          `Tipo: ${p.type} | Horario: ${
+            p.exit_time || '-'
+          } - ${
+            p.return_time || '-'
+          }`
+        );
+
+        doc.text(
+          `Estado: ${p.status}`
+        );
 
         doc.text(
           `Motivo: ${
             p.reason || '-'
-          } | Autorizó: ${
+          }`
+        );
+
+        doc.text(
+          `Autorizó: ${
             p.approved_by || '-'
           }`
         );
@@ -466,11 +529,11 @@ async function reportPDF(db) {
               p.decision_reason
             }`
           );
-
         }
 
-        doc.moveDown(0.7);
-
+        doc.moveDown(
+          0.7
+        );
       }
     );
 
@@ -481,12 +544,11 @@ async function reportPDF(db) {
   return Buffer.concat(
     chunks
   );
-
 }
 
 
 /* =========================================================
-   API
+   HANDLER PRINCIPAL
 ========================================================= */
 
 exports.handler =
@@ -497,12 +559,10 @@ exports.handler =
 
     const path =
       event.path
-
         .replace(
           /^\/\.netlify\/functions\/api/,
           ''
         )
-
         .replace(
           /^\/api/,
           ''
@@ -511,17 +571,12 @@ exports.handler =
 
     try {
 
-
-      /* ===================================================
-         CARGAR BASE DE DATOS
-      =================================================== */
-
       const db =
         await loadDB();
 
 
       /* ===================================================
-         CORS OPTIONS
+         OPTIONS / CORS
       =================================================== */
 
       if (
@@ -534,13 +589,11 @@ exports.handler =
             ok: true
           }
         );
-
       }
 
 
       /* ===================================================
          LOGIN
-         PÚBLICO
       =================================================== */
 
       if (
@@ -576,15 +629,17 @@ exports.handler =
                 'Usuario o contraseña incorrectos'
             }
           );
-
         }
 
         const token =
           jwt.sign(
             {
-              id: a.id,
+              id:
+                a.id,
+
               username:
                 a.username,
+
               name:
                 a.name
             },
@@ -612,30 +667,20 @@ exports.handler =
                 a.name
 
             }
-
           }
         );
-
       }
 
 
       /* ===================================================
-         RUTAS PÚBLICAS DEL FORMULARIO
-      =================================================== */
-
-
-      /* ===================================================
+         FORMULARIO PÚBLICO
          BUSCAR TRABAJADOR POR DNI
-
-         GET:
-         /public/worker?dni=12345678
-
-         NO REQUIERE LOGIN
       =================================================== */
 
       if (
         method === 'GET' &&
-        path === '/public/worker'
+        path ===
+          '/public/worker'
       ) {
 
         const dni =
@@ -654,7 +699,6 @@ exports.handler =
                 'Debes enviar el DNI'
             }
           );
-
         }
 
         const worker =
@@ -676,7 +720,6 @@ exports.handler =
                 'No se encontró un trabajador activo con ese DNI'
             }
           );
-
         }
 
         return json(
@@ -709,20 +752,14 @@ exports.handler =
                 worker.email || ''
 
             }
-
           }
         );
-
       }
 
 
       /* ===================================================
-         CREAR PERMISO DESDE FORMULARIO PÚBLICO
-
-         POST:
-         /public/permissions
-
-         NO REQUIERE LOGIN
+         FORMULARIO PÚBLICO
+         CREAR SOLICITUD
       =================================================== */
 
       if (
@@ -739,11 +776,6 @@ exports.handler =
             x.dni || ''
           ).trim();
 
-
-        /* -----------------------------------------------
-           VALIDACIONES
-        ------------------------------------------------ */
-
         if (!dni) {
 
           return json(
@@ -753,7 +785,6 @@ exports.handler =
                 'El DNI es obligatorio'
             }
           );
-
         }
 
         if (!x.type) {
@@ -765,7 +796,6 @@ exports.handler =
                 'El tipo de permiso es obligatorio'
             }
           );
-
         }
 
         if (!x.date) {
@@ -777,13 +807,7 @@ exports.handler =
                 'La fecha es obligatoria'
             }
           );
-
         }
-
-
-        /* -----------------------------------------------
-           BUSCAR TRABAJADOR
-        ------------------------------------------------ */
 
         const worker =
           db.workers.find(
@@ -804,13 +828,7 @@ exports.handler =
                 'No se encontró un trabajador activo con ese DNI'
             }
           );
-
         }
-
-
-        /* -----------------------------------------------
-           CREAR PERMISO
-        ------------------------------------------------ */
 
         const p = {
 
@@ -858,22 +876,13 @@ exports.handler =
 
           created_at:
             nowISO()
-
         };
 
-
-        /* -----------------------------------------------
-           GUARDAR
-        ------------------------------------------------ */
-
-        db.permissions.push(p);
+        db.permissions.push(
+          p
+        );
 
         await saveDB(db);
-
-
-        /* -----------------------------------------------
-           RESPUESTA
-        ------------------------------------------------ */
 
         return json(
           200,
@@ -909,17 +918,14 @@ exports.handler =
 
               status:
                 p.status
-
             }
-
           }
         );
-
       }
 
 
       /* ===================================================
-         DESDE AQUÍ TODO SIGUE PROTEGIDO
+         TODO LO SIGUIENTE REQUIERE LOGIN
       =================================================== */
 
       const user =
@@ -939,7 +945,6 @@ exports.handler =
           200,
           user
         );
-
       }
 
 
@@ -952,47 +957,65 @@ exports.handler =
         path === '/workers'
       ) {
 
-        const s =
-          (
+        const search =
+          String(
             event
               .queryStringParameters
               ?.search || ''
-          ).toLowerCase();
+          )
+            .trim()
+            .toLowerCase();
 
-        const rows =
-          db.workers
+        let rows =
+          db.workers.filter(
+            w => {
 
-            .filter(
-              w =>
-                !s ||
+              if (!search) {
+                return true;
+              }
 
-                [
-                  w.dni,
-                  w.names,
-                  w.position,
-                  w.area
-                ].some(
-                  v =>
-                    String(
-                      v || ''
+              return [
+
+                w.dni,
+
+                w.names,
+
+                w.position,
+
+                w.area,
+
+                w.phone,
+
+                w.email
+
+              ].some(
+                value =>
+                  String(
+                    value || ''
+                  )
+                    .toLowerCase()
+                    .includes(
+                      search
                     )
-                      .toLowerCase()
-                      .includes(s)
-                )
-            )
+              );
+            }
+          );
 
-            .sort(
-              (a, b) =>
-                a.names.localeCompare(
-                  b.names
-                )
-            );
+        rows.sort(
+          (a, b) =>
+            String(
+              a.names || ''
+            ).localeCompare(
+              String(
+                b.names || ''
+              )
+            )
+        );
 
         return json(
           200,
           rows
         );
-
       }
 
 
@@ -1020,14 +1043,19 @@ exports.handler =
                 'DNI y nombres son obligatorios'
             }
           );
-
         }
+
+        const dni =
+          String(
+            x.dni
+          ).trim();
 
         if (
           db.workers.some(
             w =>
-              w.dni ===
-              x.dni
+              String(
+                w.dni || ''
+              ).trim() === dni
           )
         ) {
 
@@ -1038,7 +1066,6 @@ exports.handler =
                 'El DNI ya está registrado'
             }
           );
-
         }
 
         const w = {
@@ -1049,11 +1076,12 @@ exports.handler =
               'workers'
             ),
 
-          dni:
-            x.dni,
+          dni,
 
           names:
-            x.names,
+            String(
+              x.names || ''
+            ).trim(),
 
           position:
             x.position || '',
@@ -1079,10 +1107,11 @@ exports.handler =
 
           created_at:
             nowISO()
-
         };
 
-        db.workers.push(w);
+        db.workers.push(
+          w
+        );
 
         await saveDB(db);
 
@@ -1093,15 +1122,14 @@ exports.handler =
             worker: w
           }
         );
-
       }
 
 
       /* ===================================================
-         TRABAJADORES - EDITAR / ELIMINAR / HISTORIAL
+         TRABAJADORES / ID
       =================================================== */
 
-      const wm =
+      const workerMatch =
         path.match(
           /^\/workers\/(\d+)(?:\/history)?$/
         );
@@ -1112,7 +1140,7 @@ exports.handler =
       =================================================== */
 
       if (
-        wm &&
+        workerMatch &&
         method === 'PUT' &&
         !path.endsWith(
           '/history'
@@ -1120,15 +1148,15 @@ exports.handler =
       ) {
 
         const id =
-          +wm[1];
+          +workerMatch[1];
 
-        const i =
+        const index =
           db.workers.findIndex(
             w =>
               w.id === id
           );
 
-        if (i < 0) {
+        if (index < 0) {
 
           return json(
             404,
@@ -1137,17 +1165,48 @@ exports.handler =
                 'Trabajador no encontrado'
             }
           );
-
         }
 
         const x =
           parseBody(event);
 
-        db.workers[i] = {
+        const newDni =
+          String(
+            x.dni ||
+            db.workers[index].dni ||
+            ''
+          ).trim();
 
-          ...db.workers[i],
+        const duplicate =
+          db.workers.some(
+            w =>
+              w.id !== id &&
+              String(
+                w.dni || ''
+              ).trim() === newDni
+          );
+
+        if (duplicate) {
+
+          return json(
+            400,
+            {
+              error:
+                'El DNI ya está registrado en otro trabajador'
+            }
+          );
+        }
+
+        db.workers[index] = {
+
+          ...db.workers[index],
+
           ...x,
-          id
+
+          id,
+
+          dni:
+            newDni
 
         };
 
@@ -1160,21 +1219,25 @@ exports.handler =
             ok: true,
 
             worker:
-              db.workers[i]
+              db.workers[index]
 
           }
         );
-
       }
 
 
       /* ===================================================
-         ELIMINAR TRABAJADOR
-         SE PASA A INACTIVO
+         TRABAJADORES - ELIMINACIÓN FÍSICA
+         
+         IMPORTANTE:
+         También elimina:
+         - permisos
+         - asistencias
+         - firmas de esos permisos
       =================================================== */
 
       if (
-        wm &&
+        workerMatch &&
         method === 'DELETE' &&
         !path.endsWith(
           '/history'
@@ -1182,15 +1245,22 @@ exports.handler =
       ) {
 
         const id =
-          +wm[1];
+          +workerMatch[1];
 
-        const worker =
-          db.workers.find(
+
+        /* -----------------------------------------------
+           BUSCAR TRABAJADOR
+        ------------------------------------------------ */
+
+        const workerIndex =
+          db.workers.findIndex(
             w =>
               w.id === id
           );
 
-        if (!worker) {
+        if (
+          workerIndex < 0
+        ) {
 
           return json(
             404,
@@ -1199,13 +1269,90 @@ exports.handler =
                 'Trabajador no encontrado'
             }
           );
-
         }
 
-        worker.status =
-          'Inactivo';
+
+        /* -----------------------------------------------
+           GUARDAR TRABAJADOR ELIMINADO
+        ------------------------------------------------ */
+
+        const deletedWorker =
+          db.workers[
+            workerIndex
+          ];
+
+
+        /* -----------------------------------------------
+           OBTENER PERMISOS DEL TRABAJADOR
+        ------------------------------------------------ */
+
+        const permissionIds =
+          db.permissions
+            .filter(
+              p =>
+                p.worker_id === id
+            )
+            .map(
+              p =>
+                p.id
+            );
+
+
+        /* -----------------------------------------------
+           ELIMINAR TRABAJADOR FÍSICAMENTE
+        ------------------------------------------------ */
+
+        db.workers.splice(
+          workerIndex,
+          1
+        );
+
+
+        /* -----------------------------------------------
+           ELIMINAR PERMISOS
+        ------------------------------------------------ */
+
+        db.permissions =
+          db.permissions.filter(
+            p =>
+              p.worker_id !== id
+          );
+
+
+        /* -----------------------------------------------
+           ELIMINAR ASISTENCIAS
+        ------------------------------------------------ */
+
+        db.attendance =
+          db.attendance.filter(
+            a =>
+              a.worker_id !== id
+          );
+
+
+        /* -----------------------------------------------
+           ELIMINAR FIRMAS RELACIONADAS
+        ------------------------------------------------ */
+
+        db.signatures =
+          db.signatures.filter(
+            s =>
+              !permissionIds.includes(
+                s.permission_id
+              )
+          );
+
+
+        /* -----------------------------------------------
+           GUARDAR BASE DE DATOS
+        ------------------------------------------------ */
 
         await saveDB(db);
+
+
+        /* -----------------------------------------------
+           RESPUESTA
+        ------------------------------------------------ */
 
         return json(
           200,
@@ -1214,22 +1361,22 @@ exports.handler =
             ok: true,
 
             message:
-              'Trabajador eliminado correctamente',
+              'Trabajador eliminado definitivamente',
 
-            worker
+            worker:
+              deletedWorker
 
           }
         );
-
       }
 
 
       /* ===================================================
-         HISTORIAL TRABAJADOR
+         HISTORIAL DEL TRABAJADOR
       =================================================== */
 
       if (
-        wm &&
+        workerMatch &&
         method === 'GET' &&
         path.endsWith(
           '/history'
@@ -1240,7 +1387,7 @@ exports.handler =
           db.workers.find(
             w =>
               w.id ===
-              +wm[1]
+              +workerMatch[1]
           );
 
         if (!worker) {
@@ -1252,7 +1399,6 @@ exports.handler =
                 'Trabajador no encontrado'
             }
           );
-
         }
 
         return json(
@@ -1273,10 +1419,10 @@ exports.handler =
                 .sort(
                   (a, b) =>
                     String(
-                      b.date
+                      b.date || ''
                     ).localeCompare(
                       String(
-                        a.date
+                        a.date || ''
                       )
                     )
                 ),
@@ -1293,17 +1439,15 @@ exports.handler =
                 .sort(
                   (a, b) =>
                     String(
-                      b.date
+                      b.date || ''
                     ).localeCompare(
                       String(
-                        a.date
+                        a.date || ''
                       )
                     )
                 )
-
           }
         );
-
       }
 
 
@@ -1334,20 +1478,31 @@ exports.handler =
         if (qp.search) {
 
           const s =
-            qp.search.toLowerCase();
+            String(
+              qp.search
+            ).toLowerCase();
 
           rows =
             rows.filter(
               p =>
-                p.dni
+                String(
+                  p.dni || ''
+                )
                   .toLowerCase()
                   .includes(s) ||
 
-                p.names
+                String(
+                  p.names || ''
+                )
+                  .toLowerCase()
+                  .includes(s) ||
+
+                String(
+                  p.type || ''
+                )
                   .toLowerCase()
                   .includes(s)
             );
-
         }
 
 
@@ -1359,7 +1514,6 @@ exports.handler =
                 p.status ===
                 qp.status
             );
-
         }
 
 
@@ -1371,7 +1525,6 @@ exports.handler =
                 p.type ===
                 qp.type
             );
-
         }
 
 
@@ -1383,7 +1536,6 @@ exports.handler =
                 p.date >=
                 qp.from
             );
-
         }
 
 
@@ -1395,27 +1547,38 @@ exports.handler =
                 p.date <=
                 qp.to
             );
-
         }
 
 
         rows.sort(
-          (a, b) =>
-            String(
-              b.date
-            ).localeCompare(
+          (a, b) => {
+
+            const dateCompare =
               String(
-                a.date
-              )
-            ) ||
-            b.id - a.id
+                b.date || ''
+              ).localeCompare(
+                String(
+                  a.date || ''
+                )
+              );
+
+            if (
+              dateCompare !== 0
+            ) {
+              return dateCompare;
+            }
+
+            return (
+              Number(b.id) -
+              Number(a.id)
+            );
+          }
         );
 
         return json(
           200,
           rows
         );
-
       }
 
 
@@ -1444,7 +1607,24 @@ exports.handler =
                 'Trabajador, tipo y fecha son obligatorios'
             }
           );
+        }
 
+        const worker =
+          db.workers.find(
+            w =>
+              w.id ===
+              +x.worker_id
+          );
+
+        if (!worker) {
+
+          return json(
+            404,
+            {
+              error:
+                'Trabajador no encontrado'
+            }
+          );
         }
 
         const p = {
@@ -1493,31 +1673,36 @@ exports.handler =
 
           created_at:
             nowISO()
-
         };
 
-        db.permissions.push(p);
+        db.permissions.push(
+          p
+        );
 
         await saveDB(db);
 
         return json(
           200,
           {
+
             ok: true,
-            permission: p
+
+            permission:
+              enrichPermission(
+                p,
+                db
+              )
+
           }
         );
-
       }
 
 
       /* ===================================================
-         PERMISOS - ELIMINAR
+         PERMISOS - ELIMINAR FÍSICAMENTE
          
          DELETE:
          /permissions/:id
-         
-         SOLO REQUIERE LA AUTENTICACIÓN DEL GERENTE
       =================================================== */
 
       const deletePermissionMatch =
@@ -1548,16 +1733,36 @@ exports.handler =
                 'Permiso no encontrado'
             }
           );
-
         }
 
         const deleted =
           db.permissions[index];
 
+
+        /* -----------------------------------------------
+           ELIMINAR PERMISO
+        ------------------------------------------------ */
+
         db.permissions.splice(
           index,
           1
         );
+
+
+        /* -----------------------------------------------
+           ELIMINAR FIRMAS DEL PERMISO
+        ------------------------------------------------ */
+
+        db.signatures =
+          db.signatures.filter(
+            s =>
+              s.permission_id !== id
+          );
+
+
+        /* -----------------------------------------------
+           GUARDAR
+        ------------------------------------------------ */
 
         await saveDB(db);
 
@@ -1575,7 +1780,6 @@ exports.handler =
 
           }
         );
-
       }
 
 
@@ -1583,13 +1787,13 @@ exports.handler =
          PERMISOS - CAMBIAR ESTADO
       =================================================== */
 
-      const pm =
+      const permissionStatusMatch =
         path.match(
           /^\/permissions\/(\d+)\/status$/
         );
 
       if (
-        pm &&
+        permissionStatusMatch &&
         method === 'PUT'
       ) {
 
@@ -1597,7 +1801,7 @@ exports.handler =
           db.permissions.find(
             x =>
               x.id ===
-              +pm[1]
+              +permissionStatusMatch[1]
           );
 
         if (!p) {
@@ -1609,7 +1813,6 @@ exports.handler =
                 'Permiso no encontrado'
             }
           );
-
         }
 
         const {
@@ -1635,7 +1838,6 @@ exports.handler =
                 'Estado inválido'
             }
           );
-
         }
 
         if (
@@ -1653,7 +1855,6 @@ exports.handler =
                 'Debes indicar el motivo del rechazo'
             }
           );
-
         }
 
         p.status =
@@ -1695,7 +1896,6 @@ exports.handler =
 
           signed_at:
             nowISO()
-
         });
 
         await saveDB(db);
@@ -1706,7 +1906,6 @@ exports.handler =
             ok: true
           }
         );
-
       }
 
 
@@ -1752,7 +1951,6 @@ exports.handler =
                   w.position || ''
 
               };
-
             }
           );
 
@@ -1765,7 +1963,6 @@ exports.handler =
                 a.date ===
                 qp.date
             );
-
         }
 
 
@@ -1777,22 +1974,25 @@ exports.handler =
                 a.worker_id ===
                 +qp.worker_id
             );
-
         }
 
 
         rows.sort(
           (a, b) =>
             String(
-              b.date
+              b.date || ''
             ).localeCompare(
               String(
-                a.date
+                a.date || ''
               )
             ) ||
 
-            a.names.localeCompare(
-              b.names
+            String(
+              a.names || ''
+            ).localeCompare(
+              String(
+                b.names || ''
+              )
             )
         );
 
@@ -1800,7 +2000,6 @@ exports.handler =
           200,
           rows
         );
-
       }
 
 
@@ -1815,6 +2014,20 @@ exports.handler =
 
         const x =
           parseBody(event);
+
+        if (
+          !x.worker_id ||
+          !x.date
+        ) {
+
+          return json(
+            400,
+            {
+              error:
+                'Trabajador y fecha son obligatorios'
+            }
+          );
+        }
 
         let a =
           db.attendance.find(
@@ -1840,11 +2053,11 @@ exports.handler =
 
             date:
               x.date
-
           };
 
-          db.attendance.push(a);
-
+          db.attendance.push(
+            a
+          );
         }
 
 
@@ -1881,10 +2094,10 @@ exports.handler =
         return json(
           200,
           {
-            ok: true
+            ok: true,
+            attendance: a
           }
         );
-
       }
 
 
@@ -1910,10 +2123,10 @@ exports.handler =
             .sort(
               (a, b) =>
                 String(
-                  b.created_at
+                  b.created_at || ''
                 ).localeCompare(
                   String(
-                    a.created_at
+                    a.created_at || ''
                   )
                 )
             )
@@ -1953,7 +2166,6 @@ exports.handler =
                     x.dni
 
                 };
-
               }
             );
 
@@ -1972,7 +2184,6 @@ exports.handler =
 
           }
         );
-
       }
 
 
@@ -2021,8 +2232,8 @@ exports.handler =
         const active =
           db.workers.filter(
             w =>
-              w.status ===
-              'Activo'
+              w.status !==
+              'Inactivo'
           ).length;
 
 
@@ -2042,9 +2253,15 @@ exports.handler =
           {};
 
         permissions.forEach(
-          p =>
+          p => {
+
             byType[p.type] =
-              (byType[p.type] || 0) + 1
+              (
+                byType[p.type] ||
+                0
+              ) + 1;
+
+          }
         );
 
 
@@ -2064,10 +2281,12 @@ exports.handler =
             if (w) {
 
               ranking[w.id] =
-                (ranking[w.id] || 0) + 1;
+                (
+                  ranking[w.id] ||
+                  0
+                ) + 1;
 
             }
-
           }
         );
 
@@ -2117,7 +2336,7 @@ exports.handler =
               permissions.filter(
                 p =>
                   String(
-                    p.date
+                    p.date || ''
                   ).startsWith(
                     month
                   )
@@ -2144,7 +2363,6 @@ exports.handler =
               Object.entries(
                 ranking
               )
-
                 .map(
                   ([id, total]) => {
 
@@ -2166,19 +2384,15 @@ exports.handler =
                       total
 
                     };
-
                   }
                 )
-
                 .sort(
                   (a, b) =>
                     b.total -
                     a.total
                 )
-
           }
         );
-
       }
 
 
@@ -2212,16 +2426,13 @@ exports.handler =
 
             'Content-Disposition':
               'attachment; filename="Reporte_Permisos.xlsx"'
-
           },
 
           body:
             b.toString(
               'base64'
             )
-
         };
-
       }
 
 
@@ -2255,16 +2466,13 @@ exports.handler =
 
             'Content-Disposition':
               'attachment; filename="Reporte_Permisos.pdf"'
-
           },
 
           body:
             b.toString(
               'base64'
             )
-
         };
-
       }
 
 
@@ -2296,7 +2504,5 @@ exports.handler =
 
         }
       );
-
     }
-
   };
